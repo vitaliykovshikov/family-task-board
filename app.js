@@ -218,6 +218,7 @@ function remainingText(toIso) {
 
 function renderUser() {
   const user = currentUser();
+  document.body.classList.toggle("child-mode", !isAdmin());
   document.querySelector("#userName").textContent = user.name;
   document.querySelector("#userRole").textContent = user.role;
   document.querySelector("#completedCount").textContent = user.completedTasksCount;
@@ -230,7 +231,10 @@ function renderUser() {
 
 function renderTasks() {
   const tasks = state.tasks
-    .filter((task) => activeFilter === "all" || task.status === activeFilter)
+    .filter((task) => {
+      if (isAdmin()) return activeFilter === "all" || task.status === activeFilter;
+      return ["available", "in_progress", "done"].includes(task.status);
+    })
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
   if (tasks.length === 0) {
@@ -242,6 +246,8 @@ function renderTasks() {
 }
 
 function renderTaskCard(task) {
+  if (!isAdmin()) return renderChildTaskCard(task);
+
   const details = task.details ? `<p class="details">${escapeHtml(task.details)}</p>` : "";
   const approval = task.requiresApproval ? "Потрібен апрув" : "Автоапрув";
   const assignee = task.assignedToUserId
@@ -270,6 +276,40 @@ function renderTaskCard(task) {
         ${assignee}
         ${started}
         ${completed}
+      </div>
+      <div class="task-actions">
+        ${renderTaskActions(task)}
+      </div>
+    </article>
+  `;
+}
+
+function renderChildTaskCard(task) {
+  const details = task.details ? `<p class="details">${escapeHtml(task.details)}</p>` : "";
+  const recurrence =
+    task.recurrence && task.recurrence !== "none"
+      ? `<span class="meta-item">${recurrenceLabels[task.recurrence]}</span>`
+      : "";
+  const started = task.startedAt
+    ? `<span class="meta-item">В роботі: ${formatElapsed(task.startedAt)}</span>`
+    : "";
+  const ownedByOther =
+    task.assignedToUserId && task.assignedToUserId !== currentUser().id
+      ? `<span class="meta-item">Взяв: ${escapeHtml(userName(task.assignedToUserId))}</span>`
+      : "";
+
+  return `
+    <article class="task-card child-task-card status-${task.status}" data-task-id="${task.id}">
+      <div class="task-header">
+        <h3 class="task-title">${escapeHtml(task.title)}</h3>
+      </div>
+      <div class="child-reward">${task.reward}</div>
+      ${details}
+      <div class="task-meta">
+        <span class="meta-item">${remainingText(task.dueAt)}</span>
+        ${recurrence}
+        ${started}
+        ${ownedByOther}
       </div>
       <div class="task-actions">
         ${renderTaskActions(task)}

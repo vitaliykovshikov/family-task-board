@@ -10,6 +10,10 @@
   --accent-dark: #205b49;
   --warning: #9b5c12;
   --danger: #9f3434;
+  --paper-blue: #dff0ff;
+  --paper-green: #e3f5dd;
+  --paper-yellow: #fff2bf;
+  --paper-pink: #ffe1e7;
   --shadow: 0 18px 45px rgba(33, 36, 31, 0.08);
 }
 
@@ -523,5 +527,180 @@ button:disabled {
 
   .main-tab {
     flex: 1 1 auto;
+  }
+}
+
+.child-mode {
+  background:
+    linear-gradient(rgba(244, 242, 236, 0.9), rgba(244, 242, 236, 0.9)),
+    repeating-linear-gradient(0deg, transparent 0 34px, rgba(32, 35, 31, 0.045) 35px 36px);
+}
+
+.child-mode .app-shell {
+  width: min(100% - 40px, 1320px);
+  padding: 26px 0 36px;
+}
+
+.child-mode .topbar {
+  display: block;
+  margin-bottom: 18px;
+  text-align: center;
+}
+
+.child-mode .eyebrow,
+.child-mode .user-card,
+.child-mode .board-toolbar {
+  display: none;
+}
+
+.child-mode h1 {
+  width: 100%;
+  font-size: clamp(42px, 6vw, 78px);
+  line-height: 0.95;
+  text-align: center;
+}
+
+.child-mode .main-tabs {
+  justify-content: center;
+  margin-bottom: 26px;
+}
+
+.child-mode .main-tab {
+  min-width: 170px;
+  min-height: 58px;
+  border-width: 2px;
+  font-size: 22px;
+}
+
+.child-mode .main-tab[data-view="users"] {
+  display: none;
+}
+
+.child-mode #tasksView .workspace {
+  display: block;
+}
+
+.child-mode .task-list {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 28px;
+}
+
+.child-mode .task-card {
+  position: relative;
+  min-height: 292px;
+  border: 0;
+  border-radius: 3px;
+  background: var(--paper-yellow);
+  box-shadow:
+    0 15px 24px rgba(51, 45, 28, 0.2),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.06);
+  padding: 28px 24px 22px;
+  transform: rotate(-1.2deg);
+}
+
+.child-mode .task-card:nth-child(4n + 2) {
+  background: var(--paper-blue);
+  transform: rotate(1deg);
+}
+
+.child-mode .task-card:nth-child(4n + 3) {
+  background: var(--paper-green);
+  transform: rotate(-0.4deg);
+}
+
+.child-mode .task-card:nth-child(4n + 4) {
+  background: var(--paper-pink);
+  transform: rotate(1.4deg);
+}
+
+.child-mode .task-card::before {
+  content: "";
+  position: absolute;
+  top: -12px;
+  left: 50%;
+  width: 86px;
+  height: 28px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.58);
+  box-shadow: 0 2px 6px rgba(70, 61, 40, 0.12);
+  transform: translateX(-50%) rotate(2deg);
+}
+
+.child-mode .task-header {
+  display: block;
+}
+
+.child-mode .task-title {
+  min-height: 84px;
+  font-size: clamp(28px, 3.1vw, 44px);
+  font-weight: 950;
+  line-height: 1.02;
+  text-transform: uppercase;
+}
+
+.child-mode .child-reward {
+  margin-top: 16px;
+  color: var(--accent-dark);
+  font-size: clamp(56px, 7vw, 92px);
+  font-weight: 950;
+  line-height: 0.9;
+}
+
+.child-mode .child-reward::after {
+  content: " балів";
+  font-size: clamp(20px, 2vw, 28px);
+}
+
+.child-mode .details {
+  margin-top: 14px;
+  color: #343b34;
+  font-size: 18px;
+  line-height: 1.3;
+}
+
+.child-mode .task-meta {
+  gap: 8px;
+  margin-top: 18px;
+  font-size: 15px;
+}
+
+.child-mode .meta-item {
+  border-color: rgba(32, 35, 31, 0.1);
+  background: rgba(255, 255, 255, 0.45);
+  color: #30362f;
+  font-weight: 800;
+}
+
+.child-mode .task-actions {
+  justify-content: stretch;
+  margin-top: 22px;
+}
+
+.child-mode .task-actions button {
+  width: 100%;
+  min-height: 58px;
+  border-radius: 8px;
+  font-size: 20px;
+}
+
+.child-mode .empty-state {
+  grid-column: 1 / -1;
+  padding: 44px;
+  font-size: 24px;
+}
+
+@media (max-width: 980px) {
+  .child-mode .task-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 680px) {
+  .child-mode .app-shell {
+    width: min(100% - 24px, 1320px);
+  }
+
+  .child-mode .task-list {
+    grid-template-columns: 1fr;
   }
 }
