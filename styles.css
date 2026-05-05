@@ -652,7 +652,9 @@ button:disabled {
   margin-bottom: 26px;
 }
 
-.child-mode .child-refresh-tab {
+.child-mode .child-quick-actions {
+  display: inline-flex;
+  gap: 10px;
   margin-left: auto;
 }
 
@@ -681,8 +683,7 @@ button:disabled {
 }
 
 body:not(.child-mode) .child-history-tab,
-body:not(.child-mode) .child-home-tab,
-body:not(.child-mode) .child-refresh-tab {
+body:not(.child-mode) .child-quick-actions {
   display: none;
 }
 

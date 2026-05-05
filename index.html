@@ -38,17 +38,21 @@
       </header>
 
       <nav class="main-tabs" aria-label="Основні розділи">
-        <a
-          class="main-tab child-home-tab"
-          href="http://192.168.0.238:8123/dashboard-dacha/default_view?kiosk"
-        >
-          Дача
-        </a>
         <button class="main-tab active" type="button" data-view="tasks">Завдання</button>
         <button class="main-tab child-history-tab" type="button" data-view="completed">Виконані сьогодні</button>
-        <button class="main-tab child-refresh-tab icon-tab" type="button" id="refreshTasksButton" aria-label="Оновити завдання" title="Оновити завдання">↻</button>
         <button class="main-tab" type="button" data-view="shop">Магазин</button>
         <button class="main-tab" type="button" data-view="users">Користувачі</button>
+        <span class="child-quick-actions">
+          <a
+            class="main-tab icon-tab child-home-tab"
+            href="http://192.168.0.238:8123/dashboard-dacha/default_view?kiosk"
+            aria-label="Дача"
+            title="Дача"
+          >
+            🏠
+          </a>
+          <button class="main-tab child-refresh-tab icon-tab" type="button" id="refreshTasksButton" aria-label="Оновити завдання" title="Оновити завдання">↻</button>
+        </span>
       </nav>
       <div id="childBalance" class="child-balance" hidden></div>
 
