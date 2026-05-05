@@ -65,6 +65,7 @@ const rewardForm = document.querySelector("#rewardForm");
 const taskList = document.querySelector("#taskList");
 const completedTodayList = document.querySelector("#completedTodayList");
 const todayEarned = document.querySelector("#todayEarned");
+const childBalance = document.querySelector("#childBalance");
 const rewardList = document.querySelector("#rewardList");
 const usersList = document.querySelector("#usersList");
 const authGate = document.querySelector("#authGate");
@@ -73,6 +74,11 @@ const authGateText = document.querySelector("#authGateText");
 const adminAuthForm = document.querySelector("#adminAuthForm");
 const authError = document.querySelector("#authError");
 const taskTargetUser = document.querySelector("#taskTargetUser");
+const editingTaskId = document.querySelector("#editingTaskId");
+const taskFormTitle = document.querySelector("#taskFormTitle");
+const taskSubmitButton = document.querySelector("#taskSubmitButton");
+const cancelTaskEdit = document.querySelector("#cancelTaskEdit");
+const refreshTasksButton = document.querySelector("#refreshTasksButton");
 const tabs = document.querySelectorAll("[data-filter]");
 const mainTabs = document.querySelectorAll("[data-view]");
 const resetDemoButton = document.querySelector("#resetDemo");
@@ -177,7 +183,12 @@ function applyCurrentUserFromUrl() {
 
 function saveState() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  if (canAccessRemoteData()) syncRemoteState();
+  if (!canAccessRemoteData()) return;
+  if (isAdmin()) {
+    syncRemoteState();
+  } else {
+    syncCurrentMemberUser();
+  }
 }
 
 function currentUser() {
@@ -312,6 +323,8 @@ function renderUser() {
   document.querySelector("#completedCount").textContent = user.completedTasksCount;
   document.querySelector("#balance").textContent = user.balance;
   document.querySelector("#userUrlHint").textContent = `?user=${userUrlValue(user)}`;
+  childBalance.hidden = isAdminRoute() || !canAccessRemoteData();
+  childBalance.textContent = `${user.balance} балів`;
   adminOnlyElements.forEach((element) => {
     element.hidden = !isAdmin();
   });
@@ -331,8 +344,9 @@ function renderTasks() {
     .filter((task) => !task.deletedAt)
     .filter((task) => {
       if (isAdminRoute()) return activeFilter === "all" || task.status === activeFilter;
-      if (task.targetUserId && !isTaskForCurrentUser(task)) return false;
-      return ["available", "in_progress"].includes(task.status);
+      if (task.status === "available") return isTaskForCurrentUser(task);
+      if (task.status === "in_progress") return task.assignedToUserId === currentUser().id;
+      return false;
     })
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
@@ -437,7 +451,7 @@ function renderChildTaskCard(task) {
 }
 
 function renderTaskActions(task) {
-  if (task.status === "available" && (!task.targetUserId || task.targetUserId === currentUser().id)) {
+  if (task.status === "available" && isTaskForCurrentUser(task)) {
     return `<button class="primary" type="button" data-task-action="start">Взяти</button>`;
   }
 
@@ -449,11 +463,17 @@ function renderTaskActions(task) {
     return `
       <button class="primary" type="button" data-task-action="approve">Апрувити</button>
       <button class="secondary" type="button" data-task-action="return">Повернути в роботу</button>
+      <button class="secondary" type="button" data-task-action="edit">Редагувати</button>
       <button class="danger" type="button" data-task-action="delete">Видалити</button>
     `;
   }
 
-  return isAdmin() ? `<button class="danger" type="button" data-task-action="delete">Видалити</button>` : "";
+  return isAdmin()
+    ? `
+      <button class="secondary" type="button" data-task-action="edit">Редагувати</button>
+      <button class="danger" type="button" data-task-action="delete">Видалити</button>
+    `
+    : "";
 }
 
 function renderCompletedToday() {
@@ -481,12 +501,16 @@ function renderCompletedToday() {
 
   completedTodayList.innerHTML = todayTasks
     .map(
-      (task) => `
-        <article class="completed-row">
+      (task) => {
+        const isPending = task.status === "done";
+        return `
+        <article class="completed-row ${isPending ? "pending-approval" : "approved"}">
           <strong>${escapeHtml(task.title)}</strong>
           <span>${task.reward} балів · ${formatDate(task.completedAt)}</span>
+          <span class="approval-marker">${isPending ? "На апруві" : "Зараховано"}</span>
         </article>
-      `,
+      `;
+      },
     )
     .join("");
 }
@@ -688,13 +712,13 @@ function escapeHtml(value) {
     .replaceAll("'", "&#039;");
 }
 
-function rerender() {
+function rerender({ save = true } = {}) {
   renderUser();
   renderTasks();
   renderCompletedToday();
   renderRewards();
   renderUsers();
-  saveState();
+  if (save) saveState();
 }
 
 function addTask(formData) {
@@ -730,6 +754,64 @@ function addTask(formData) {
     approvedAt: null,
     updatedAt: createdAt,
   });
+}
+
+function updateTaskFromForm(formData) {
+  const taskId = formData.get("editingTaskId");
+  if (!isAdmin() || !taskId) return false;
+
+  const task = state.tasks.find((item) => item.id === taskId);
+  if (!task) return false;
+
+  const deadlineRaw = formData.get("deadlineAmount");
+  const deadlineAmount = deadlineRaw ? Number(deadlineRaw) : null;
+  const deadlineUnit = formData.get("deadlineUnit");
+
+  task.title = formData.get("title").trim();
+  task.reward = Number(formData.get("reward"));
+  task.details = formData.get("details").trim();
+  task.targetUserId = formData.get("targetUserId") || null;
+  task.difficulty = formData.get("difficulty") || "medium";
+  task.deadlineAmount = deadlineAmount;
+  task.deadlineUnit = deadlineUnit;
+  task.dueAt = deadlineAmount ? addDuration(task.createdAt, deadlineAmount, deadlineUnit) : null;
+  task.requiresApproval = formData.get("requiresApproval") === "on";
+  task.recurrence = formData.get("recurrence");
+  task.updatedAt = nowIso();
+  return true;
+}
+
+function startTaskEdit(task) {
+  if (!isAdmin()) return;
+
+  editingTaskId.value = task.id;
+  taskForm.elements.title.value = task.title;
+  taskForm.elements.reward.value = task.reward;
+  taskForm.elements.details.value = task.details || "";
+  taskForm.elements.targetUserId.value = task.targetUserId || "";
+  taskForm.elements.difficulty.value = task.difficulty || "medium";
+  taskForm.elements.deadlineAmount.value = task.deadlineAmount || "";
+  taskForm.elements.deadlineUnit.value = task.deadlineUnit || "day";
+  taskForm.elements.recurrence.value = task.recurrence || "none";
+  taskForm.elements.requiresApproval.checked = Boolean(task.requiresApproval);
+  taskFormTitle.textContent = "Редагування завдання";
+  taskSubmitButton.textContent = "Зберегти завдання";
+  cancelTaskEdit.hidden = false;
+  taskForm.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function resetTaskForm() {
+  taskForm.reset();
+  editingTaskId.value = "";
+  taskForm.elements.reward.value = 10;
+  taskForm.elements.deadlineAmount.value = "";
+  taskForm.elements.deadlineUnit.value = "day";
+  taskForm.elements.difficulty.value = "medium";
+  taskForm.elements.recurrence.value = "none";
+  taskForm.elements.requiresApproval.checked = true;
+  taskFormTitle.textContent = "Нове завдання";
+  taskSubmitButton.textContent = "Додати завдання";
+  cancelTaskEdit.hidden = true;
 }
 
 function addReward(formData) {
@@ -905,6 +987,16 @@ function syncRemoteState() {
     });
 }
 
+function syncCurrentMemberUser() {
+  if (!remote.enabled || !canAccessRemoteData() || isAdminRoute()) return;
+  const user = currentUser();
+  if (!user) return;
+
+  remote.client.from("users").upsert(userToDb(user)).then(({ error }) => {
+    if (error) console.warn("Supabase member user sync warning", error);
+  });
+}
+
 async function syncRemoteStateSequentially() {
   const operations = [
     state.users.length ? ["users", state.users.map(userToDb)] : null,
@@ -918,6 +1010,13 @@ async function syncRemoteStateSequentially() {
     const { error } = await remote.client.from(table).upsert(rows);
     if (error) console.warn(`Supabase sync warning: ${table}`, error);
   }
+}
+
+async function updateRemoteTask(task) {
+  if (!remote.enabled || !canAccessRemoteData() || !task) return;
+
+  const { error } = await remote.client.from("tasks").update(taskToDb(task)).eq("id", task.id);
+  if (error) console.warn("Supabase task update warning", error);
 }
 
 function userToDb(user) {
@@ -1080,7 +1179,7 @@ function purchaseTransactionFromDb(row) {
   };
 }
 
-taskForm.addEventListener("submit", (event) => {
+taskForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const formData = new FormData(taskForm);
   const title = formData.get("title").trim();
@@ -1091,11 +1190,18 @@ taskForm.addEventListener("submit", (event) => {
   if (!title || !Number.isFinite(reward) || reward <= 0) return;
   if (deadlineAmount !== null && deadlineAmount <= 0) return;
 
-  addTask(formData);
-  taskForm.reset();
-  taskForm.elements.reward.value = 10;
-  taskForm.elements.requiresApproval.checked = true;
+  if (formData.get("editingTaskId")) {
+    updateTaskFromForm(formData);
+  } else {
+    addTask(formData);
+  }
+  resetTaskForm();
   rerender();
+  await flushRemoteState();
+});
+
+cancelTaskEdit.addEventListener("click", () => {
+  resetTaskForm();
 });
 
 rewardForm.addEventListener("submit", (event) => {
@@ -1156,6 +1262,7 @@ taskList.addEventListener("click", async (event) => {
   const card = button.closest("[data-task-id]");
   const taskId = card.dataset.taskId;
   const action = button.dataset.taskAction;
+  let changedTask = null;
 
   if (action === "delete" && isAdmin()) {
     await deleteTask(taskId);
@@ -1163,14 +1270,22 @@ taskList.addEventListener("click", async (event) => {
     return;
   }
 
+  if (action === "edit" && isAdmin()) {
+    const task = state.tasks.find((item) => item.id === taskId);
+    if (task) startTaskEdit(task);
+    return;
+  }
+
   updateTask(taskId, (task) => {
     if (action === "start") {
+      if (task.status !== "available" || !isTaskForCurrentUser(task)) return;
       task.status = "in_progress";
       task.assignedToUserId = currentUser().id;
       task.startedAt = nowIso();
+      changedTask = task;
     }
 
-    if (action === "complete" && task.assignedToUserId === currentUser().id) {
+    if (action === "complete" && task.status === "in_progress" && task.assignedToUserId === currentUser().id) {
       task.completedByUserId = currentUser().id;
       task.completedAt = nowIso();
 
@@ -1179,21 +1294,28 @@ taskList.addEventListener("click", async (event) => {
       } else {
         approveTask(task);
       }
+      changedTask = task;
     }
 
     if (action === "approve" && isAdmin()) {
       approveTask(task);
+      changedTask = task;
     }
 
     if (action === "return" && isAdmin()) {
       task.status = "in_progress";
       task.completedAt = null;
       task.completedByUserId = null;
+      changedTask = task;
     }
   });
 
   rerender();
-  await flushRemoteState();
+  if (isAdmin()) {
+    await flushRemoteState();
+  } else if (changedTask) {
+    await updateRemoteTask(changedTask);
+  }
 });
 
 async function deleteTask(taskId) {
@@ -1295,15 +1417,17 @@ mainTabs.forEach((tab) => {
 
 resetDemoButton.addEventListener("click", () => {
   state = structuredClone(seedState);
-  taskForm.reset();
+  resetTaskForm();
   rewardForm.reset();
-  taskForm.elements.reward.value = 10;
-  taskForm.elements.requiresApproval.checked = true;
   rewardForm.elements.cost.value = 20;
   rewardForm.elements.stock.value = 1;
   rewardForm.elements.availableAmount.value = 1;
   rewardForm.elements.perUserLimit.value = 1;
   rerender();
+});
+
+refreshTasksButton.addEventListener("click", async () => {
+  await refreshRemoteData();
 });
 
 setInterval(() => {
@@ -1312,10 +1436,31 @@ setInterval(() => {
 
 setInterval(updateLiveTimers, 1000);
 
+setInterval(() => {
+  refreshRemoteData({ silent: true });
+}, 15000);
+
 function updateLiveTimers() {
   document.querySelectorAll("[data-started-at]").forEach((element) => {
     element.textContent = `В роботі: ${formatElapsed(element.dataset.startedAt, nowIso(), { includeSeconds: true })}`;
   });
+}
+
+async function refreshRemoteData({ silent = false } = {}) {
+  if (!remote.enabled || !canAccessRemoteData()) return;
+  if (remote.syncInProgress) return;
+
+  refreshTasksButton.disabled = true;
+  if (!silent) refreshTasksButton.textContent = "Оновлюю";
+
+  try {
+    await loadRemoteState();
+    applyCurrentUserFromUrl();
+    rerender({ save: false });
+  } finally {
+    refreshTasksButton.disabled = false;
+    refreshTasksButton.textContent = "Оновити";
+  }
 }
 
 async function startApp() {

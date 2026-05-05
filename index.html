@@ -40,9 +40,11 @@
       <nav class="main-tabs" aria-label="Основні розділи">
         <button class="main-tab active" type="button" data-view="tasks">Завдання</button>
         <button class="main-tab child-history-tab" type="button" data-view="completed">Виконані сьогодні</button>
+        <button class="main-tab child-refresh-tab" type="button" id="refreshTasksButton">Оновити</button>
         <button class="main-tab" type="button" data-view="shop">Магазин</button>
         <button class="main-tab" type="button" data-view="users">Користувачі</button>
       </nav>
+      <div id="childBalance" class="child-balance" hidden></div>
 
       <section id="authGate" class="panel auth-gate" hidden>
         <h2 id="authGateTitle">Потрібен вхід</h2>
@@ -69,8 +71,9 @@
       <section class="view active" id="tasksView">
         <div class="workspace">
           <form id="taskForm" class="panel task-form" data-admin-only>
+            <input type="hidden" name="editingTaskId" id="editingTaskId" />
             <div class="panel-header">
-              <h2>Нове завдання</h2>
+              <h2 id="taskFormTitle">Нове завдання</h2>
               <button type="button" class="ghost" id="resetDemo">Скинути</button>
             </div>
 
@@ -138,7 +141,10 @@
               Потрібен апрув
             </label>
 
-            <button type="submit" class="primary">Додати завдання</button>
+            <div class="form-actions">
+              <button type="submit" class="primary" id="taskSubmitButton">Додати завдання</button>
+              <button type="button" class="ghost" id="cancelTaskEdit" hidden>Скасувати редагування</button>
+            </div>
           </form>
 
           <section class="board" aria-label="Дошка завдань">

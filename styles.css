@@ -229,6 +229,16 @@ textarea:focus {
   gap: 12px;
 }
 
+.form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.form-actions button {
+  flex: 1 1 160px;
+}
+
 .checkbox-row {
   display: flex;
   align-items: center;
@@ -621,6 +631,17 @@ button:disabled {
   text-align: center;
 }
 
+.child-balance {
+  width: max-content;
+  margin: -8px auto 22px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  padding: 12px 24px;
+  font-size: clamp(24px, 3vw, 42px);
+  font-weight: 950;
+}
+
 .child-mode .main-tabs {
   justify-content: center;
   margin-bottom: 26px;
@@ -637,7 +658,8 @@ button:disabled {
   display: none;
 }
 
-body:not(.child-mode) .child-history-tab {
+body:not(.child-mode) .child-history-tab,
+body:not(.child-mode) .child-refresh-tab {
   display: none;
 }
 
@@ -791,6 +813,19 @@ body:not(.child-mode) .child-history-tab {
   box-shadow: var(--shadow);
 }
 
+.completed-row.pending-approval {
+  border: 2px solid rgba(155, 92, 18, 0.34);
+  background: #fff6df;
+}
+
+.completed-row.pending-approval .approval-marker::before {
+  content: "⏳ ";
+}
+
+.completed-row.approved .approval-marker::before {
+  content: "✓ ";
+}
+
 .completed-row strong {
   font-size: clamp(20px, 2.4vw, 30px);
   text-transform: uppercase;
@@ -800,6 +835,17 @@ body:not(.child-mode) .child-history-tab {
   color: var(--accent-dark);
   font-size: 20px;
   font-weight: 900;
+}
+
+.completed-row.pending-approval span {
+  color: var(--warning);
+}
+
+.approval-marker {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  padding: 8px 12px;
 }
 
 @media (max-width: 980px) {
