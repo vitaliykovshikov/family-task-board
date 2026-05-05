@@ -57,6 +57,8 @@ let activeView = "tasks";
 const taskForm = document.querySelector("#taskForm");
 const rewardForm = document.querySelector("#rewardForm");
 const taskList = document.querySelector("#taskList");
+const completedTodayList = document.querySelector("#completedTodayList");
+const todayEarned = document.querySelector("#todayEarned");
 const rewardList = document.querySelector("#rewardList");
 const usersList = document.querySelector("#usersList");
 const authGate = document.querySelector("#authGate");
@@ -110,13 +112,13 @@ function normalizeState(nextState) {
     normalized.selectedUserId = normalized.currentUserId;
   }
   normalized.tasks = normalized.tasks.map((task) => {
-    const deadlineAmount = task.deadlineAmount || (task.timeLimitMinutes ? 1 : 1);
+    const deadlineAmount = task.deadlineAmount || null;
     const deadlineUnit = task.deadlineUnit || "day";
     return {
       ...task,
       deadlineAmount,
       deadlineUnit,
-      dueAt: task.dueAt || addDuration(task.createdAt || nowIso(), deadlineAmount, deadlineUnit),
+      dueAt: task.dueAt || (deadlineAmount ? addDuration(task.createdAt || nowIso(), deadlineAmount, deadlineUnit) : null),
       assignedToUserId: task.assignedToUserId || null,
       startedAt: task.startedAt || null,
       completedByUserId: task.completedByUserId || null,
@@ -277,6 +279,7 @@ function remainingText(toIso) {
 
 function renderUser() {
   const user = currentUser();
+  document.body.classList.remove("booting");
   document.body.classList.toggle("locked-mode", !canAccessRemoteData());
   document.body.classList.toggle("child-mode", !isAdminRoute());
   document.querySelector("h1").textContent = isAdminRoute()
@@ -292,13 +295,13 @@ function renderUser() {
   });
   adminAuthForm.hidden = !isAdminRoute() || !remote.enabled || remote.adminAllowed;
   authGate.hidden = canAccessRemoteData();
-  authGateTitle.textContent = isAdminRoute() ? "Увійди як адмін" : "Потрібен вхід";
+  authGateTitle.textContent = isAdminRoute() ? "Увійди як адмін" : "Потрібно увійти";
   authGateText.textContent =
     isAdminRoute() && remote.adminSession && !remote.adminAllowed
       ? "Поточний акаунт не доданий у app_admins. Увійди іншим адмінським акаунтом."
       : isAdminRoute()
         ? "Введи email і пароль адміна, щоб побачити дані та керувати дошкою."
-        : "Для дитячого планшета додай email і password у URL, щоб сторінка відкривалась одразу.";
+        : "";
 }
 
 function renderTasks() {
@@ -331,6 +334,12 @@ function renderTaskCard(task) {
   const completed = task.completedAt
     ? `<span class="meta-item">Виконано: ${formatDate(task.completedAt)}</span>`
     : "";
+  const deadline = task.dueAt
+    ? `
+        <span class="meta-item">Дедлайн: ${formatDuration(task.deadlineAmount, task.deadlineUnit)}</span>
+        <span class="meta-item">${remainingText(task.dueAt)}</span>
+      `
+    : "";
 
   return `
     <article class="task-card" data-task-id="${task.id}">
@@ -341,8 +350,7 @@ function renderTaskCard(task) {
       ${details}
       <div class="task-meta">
         <span class="meta-item">Нагорода: ${task.reward}</span>
-        <span class="meta-item">Дедлайн: ${formatDuration(task.deadlineAmount, task.deadlineUnit)}</span>
-        <span class="meta-item">${remainingText(task.dueAt)}</span>
+        ${deadline}
         <span class="meta-item">${approval}</span>
         <span class="meta-item">${recurrenceLabels[task.recurrence]}</span>
         ${assignee}
@@ -363,7 +371,7 @@ function renderChildTaskCard(task) {
       ? `<span class="meta-item">${recurrenceLabels[task.recurrence]}</span>`
       : "";
   const started = task.startedAt
-    ? `<span class="meta-item">В роботі: ${formatElapsed(task.startedAt)}</span>`
+    ? `<span class="meta-item live-timer" data-started-at="${task.startedAt}">В роботі: ${formatElapsed(task.startedAt)}</span>`
     : "";
   const ownedByOther =
     task.assignedToUserId && task.assignedToUserId !== currentUser().id
@@ -378,7 +386,7 @@ function renderChildTaskCard(task) {
       <div class="child-reward">${task.reward}</div>
       ${details}
       <div class="task-meta">
-        <span class="meta-item">${remainingText(task.dueAt)}</span>
+        ${task.dueAt ? `<span class="meta-item">${remainingText(task.dueAt)}</span>` : ""}
         ${recurrence}
         ${started}
         ${ownedByOther}
@@ -407,6 +415,50 @@ function renderTaskActions(task) {
   }
 
   return "";
+}
+
+function renderCompletedToday() {
+  const todayTasks = state.tasks
+    .filter(
+      (task) =>
+        task.completedByUserId === currentUser().id &&
+        task.completedAt &&
+        isToday(task.completedAt) &&
+        ["done", "approved"].includes(task.status),
+    )
+    .sort((a, b) => new Date(b.completedAt) - new Date(a.completedAt));
+  const earned = state.rewardTransactions
+    .filter((transaction) => transaction.userId === currentUser().id && transaction.type === "task_reward")
+    .filter((transaction) => isToday(transaction.createdAt))
+    .reduce((sum, transaction) => sum + transaction.amount, 0);
+
+  todayEarned.textContent = `${earned} балів`;
+
+  if (!todayTasks.length) {
+    completedTodayList.innerHTML = '<div class="empty-state">Сьогодні ще немає виконаних завдань</div>';
+    return;
+  }
+
+  completedTodayList.innerHTML = todayTasks
+    .map(
+      (task) => `
+        <article class="completed-row">
+          <strong>${escapeHtml(task.title)}</strong>
+          <span>${task.reward} балів · ${formatDate(task.completedAt)}</span>
+        </article>
+      `,
+    )
+    .join("");
+}
+
+function isToday(value) {
+  const date = new Date(value);
+  const today = new Date();
+  return (
+    date.getFullYear() === today.getFullYear() &&
+    date.getMonth() === today.getMonth() &&
+    date.getDate() === today.getDate()
+  );
 }
 
 function renderRewards() {
@@ -587,6 +639,7 @@ function escapeHtml(value) {
 function rerender() {
   renderUser();
   renderTasks();
+  renderCompletedToday();
   renderRewards();
   renderUsers();
   saveState();
@@ -597,7 +650,8 @@ function addTask(formData) {
 
   const user = currentUser();
   const createdAt = nowIso();
-  const deadlineAmount = Number(formData.get("deadlineAmount"));
+  const deadlineRaw = formData.get("deadlineAmount");
+  const deadlineAmount = deadlineRaw ? Number(deadlineRaw) : null;
   const deadlineUnit = formData.get("deadlineUnit");
 
   state.tasks.push({
@@ -607,7 +661,7 @@ function addTask(formData) {
     details: formData.get("details").trim(),
     deadlineAmount,
     deadlineUnit,
-    dueAt: addDuration(createdAt, deadlineAmount, deadlineUnit),
+    dueAt: deadlineAmount ? addDuration(createdAt, deadlineAmount, deadlineUnit) : null,
     requiresApproval: formData.get("requiresApproval") === "on",
     recurrence: formData.get("recurrence"),
     status: "available",
@@ -972,14 +1026,15 @@ taskForm.addEventListener("submit", (event) => {
   const formData = new FormData(taskForm);
   const title = formData.get("title").trim();
   const reward = Number(formData.get("reward"));
-  const deadlineAmount = Number(formData.get("deadlineAmount"));
+  const deadlineRaw = formData.get("deadlineAmount");
+  const deadlineAmount = deadlineRaw ? Number(deadlineRaw) : null;
 
-  if (!title || !Number.isFinite(reward) || reward <= 0 || deadlineAmount <= 0) return;
+  if (!title || !Number.isFinite(reward) || reward <= 0) return;
+  if (deadlineAmount !== null && deadlineAmount <= 0) return;
 
   addTask(formData);
   taskForm.reset();
   taskForm.elements.reward.value = 10;
-  taskForm.elements.deadlineAmount.value = 1;
   taskForm.elements.requiresApproval.checked = true;
   rerender();
 });
@@ -1143,7 +1198,6 @@ resetDemoButton.addEventListener("click", () => {
   taskForm.reset();
   rewardForm.reset();
   taskForm.elements.reward.value = 10;
-  taskForm.elements.deadlineAmount.value = 1;
   taskForm.elements.requiresApproval.checked = true;
   rewardForm.elements.cost.value = 20;
   rewardForm.elements.stock.value = 1;
@@ -1155,6 +1209,14 @@ resetDemoButton.addEventListener("click", () => {
 setInterval(() => {
   if (activeView === "tasks") renderTasks();
 }, 60000);
+
+setInterval(updateLiveTimers, 1000);
+
+function updateLiveTimers() {
+  document.querySelectorAll("[data-started-at]").forEach((element) => {
+    element.textContent = `В роботі: ${formatElapsed(element.dataset.startedAt)}`;
+  });
+}
 
 async function startApp() {
   applyCurrentUserFromUrl();

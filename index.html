@@ -6,7 +6,7 @@
     <title>Сімейна дошка завдань</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
-  <body>
+  <body class="booting locked-mode">
     <main class="app-shell">
       <header class="topbar">
         <div>
@@ -39,13 +39,14 @@
 
       <nav class="main-tabs" aria-label="Основні розділи">
         <button class="main-tab active" type="button" data-view="tasks">Завдання</button>
+        <button class="main-tab child-history-tab" type="button" data-view="completed">Виконані сьогодні</button>
         <button class="main-tab" type="button" data-view="shop">Магазин</button>
         <button class="main-tab" type="button" data-view="users">Користувачі</button>
       </nav>
 
       <section id="authGate" class="panel auth-gate" hidden>
         <h2 id="authGateTitle">Потрібен вхід</h2>
-        <p class="muted" id="authGateText">Дані сімейної дошки доступні тільки після входу.</p>
+        <p class="muted" id="authGateText"></p>
       </section>
 
       <form id="adminAuthForm" class="panel admin-auth" hidden>
@@ -91,7 +92,7 @@
             <div class="form-grid">
               <label>
                 Час від створення
-                <input name="deadlineAmount" type="number" min="1" step="1" value="1" required />
+                <input name="deadlineAmount" type="number" min="1" step="1" placeholder="Без дедлайну" />
               </label>
 
               <label>
@@ -133,6 +134,16 @@
             <div id="taskList" class="task-list"></div>
           </section>
         </div>
+      </section>
+
+      <section class="view" id="completedView">
+        <section class="board child-completed-board" aria-label="Виконані сьогодні">
+          <div class="section-heading">
+            <h2>Виконані сьогодні</h2>
+            <strong id="todayEarned">0 балів</strong>
+          </div>
+          <div id="completedTodayList" class="completed-today-list"></div>
+        </section>
       </section>
 
       <section class="view" id="shopView">

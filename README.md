@@ -58,6 +58,8 @@ window.APP_CONFIG = {
 
 Після вмикання авторизації виконай `migrations/001_require_auth.sql`, якщо схема вже була створена раніше. Вона закриває читання/запис для anonymous clients: без Supabase session дані не видно.
 
+Якщо схема вже була створена до того, як дедлайн завдання став опціональним, також виконай `migrations/002_optional_task_deadline.sql`.
+
 Для дитячого планшета можна зробити Supabase Auth user і відкривати URL так:
 
 ```txt

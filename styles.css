@@ -187,6 +187,10 @@ h2 {
   display: none;
 }
 
+.booting .app-shell {
+  visibility: hidden;
+}
+
 label {
   display: grid;
   gap: 7px;
@@ -513,6 +517,10 @@ button:disabled {
   margin-bottom: 8px;
 }
 
+.auth-gate .muted:empty {
+  display: none;
+}
+
 .balance-editor {
   display: grid;
   grid-template-columns: minmax(0, 220px) auto;
@@ -629,6 +637,10 @@ button:disabled {
   display: none;
 }
 
+body:not(.child-mode) .child-history-tab {
+  display: none;
+}
+
 .child-mode #tasksView .workspace {
   display: block;
 }
@@ -740,6 +752,54 @@ button:disabled {
   grid-column: 1 / -1;
   padding: 44px;
   font-size: 24px;
+}
+
+.child-completed-board {
+  max-width: 860px;
+  margin: 0 auto;
+}
+
+.child-completed-board .section-heading {
+  margin-bottom: 18px;
+}
+
+.child-completed-board .section-heading h2 {
+  font-size: clamp(30px, 4vw, 52px);
+}
+
+#todayEarned {
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  padding: 12px 18px;
+  font-size: clamp(20px, 2.4vw, 30px);
+}
+
+.completed-today-list {
+  display: grid;
+  gap: 12px;
+}
+
+.completed-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.72);
+  padding: 18px 20px;
+  box-shadow: var(--shadow);
+}
+
+.completed-row strong {
+  font-size: clamp(20px, 2.4vw, 30px);
+  text-transform: uppercase;
+}
+
+.completed-row span {
+  color: var(--accent-dark);
+  font-size: 20px;
+  font-weight: 900;
 }
 
 @media (max-width: 980px) {

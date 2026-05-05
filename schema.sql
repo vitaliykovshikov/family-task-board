@@ -13,9 +13,9 @@ create table tasks (
   title text not null,
   reward integer not null check (reward > 0),
   details text,
-  deadline_amount integer not null check (deadline_amount > 0),
+  deadline_amount integer check (deadline_amount is null or deadline_amount > 0),
   deadline_unit text not null check (deadline_unit in ('day', 'week', 'month')),
-  due_at timestamptz not null,
+  due_at timestamptz,
   requires_approval boolean not null default true,
   recurrence text not null default 'none' check (recurrence in ('none', 'daily', 'weekly', 'monthly')),
   status text not null default 'available' check (
