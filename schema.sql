@@ -31,6 +31,7 @@ create table tasks (
   started_at timestamptz,
   completed_at timestamptz,
   approved_at timestamptz,
+  deleted_at timestamptz,
   updated_at timestamptz not null default now()
 );
 

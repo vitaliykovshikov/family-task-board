@@ -64,6 +64,8 @@ window.APP_CONFIG = {
 
 Для видалення завдань адміном виконай `migrations/004_delete_tasks_policy.sql`.
 
+Для стабільного видалення без втрати історії виконай `migrations/005_soft_delete_tasks.sql`.
+
 Для дитячого планшета можна зробити Supabase Auth user і відкривати URL так:
 
 ```txt

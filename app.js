@@ -129,6 +129,7 @@ function normalizeState(nextState) {
       assignedToUserId: task.assignedToUserId || null,
       targetUserId: task.targetUserId || null,
       difficulty: task.difficulty || "medium",
+      deletedAt: task.deletedAt || null,
       startedAt: task.startedAt || null,
       completedByUserId: task.completedByUserId || null,
       approvedByUserId: task.approvedByUserId || null,
@@ -318,6 +319,7 @@ function renderUser() {
 
 function renderTasks() {
   const tasks = state.tasks
+    .filter((task) => !task.deletedAt)
     .filter((task) => {
       if (isAdminRoute()) return activeFilter === "all" || task.status === activeFilter;
       if (task.targetUserId && task.targetUserId !== currentUser().id) return false;
@@ -441,6 +443,7 @@ function renderCompletedToday() {
   const todayTasks = state.tasks
     .filter(
       (task) =>
+        !task.deletedAt &&
         task.completedByUserId === currentUser().id &&
         task.completedAt &&
         isToday(task.completedAt) &&
@@ -699,6 +702,7 @@ function addTask(formData) {
     requiresApproval: formData.get("requiresApproval") === "on",
     recurrence: formData.get("recurrence"),
     status: "available",
+    deletedAt: null,
     createdByUserId: user.id,
     assignedToUserId: null,
     completedByUserId: null,
@@ -934,6 +938,7 @@ function taskToDb(task) {
     due_at: task.dueAt,
     target_user_id: task.targetUserId,
     difficulty: task.difficulty,
+    deleted_at: task.deletedAt,
     requires_approval: task.requiresApproval,
     recurrence: task.recurrence,
     status: task.status,
@@ -960,6 +965,7 @@ function taskFromDb(row) {
     dueAt: row.due_at,
     targetUserId: row.target_user_id,
     difficulty: row.difficulty || "medium",
+    deletedAt: row.deleted_at,
     requiresApproval: row.requires_approval,
     recurrence: row.recurrence,
     status: row.status,
@@ -1174,15 +1180,22 @@ taskList.addEventListener("click", async (event) => {
 });
 
 async function deleteTask(taskId) {
+  const task = state.tasks.find((item) => item.id === taskId);
+  if (!task) return;
+
+  task.deletedAt = nowIso();
+  task.updatedAt = nowIso();
+
   if (remote.enabled && canAccessRemoteData()) {
-    const { error } = await remote.client.from("tasks").delete().eq("id", taskId);
+    const { error } = await remote.client
+      .from("tasks")
+      .update({ deleted_at: task.deletedAt, updated_at: task.updatedAt })
+      .eq("id", taskId);
     if (error) {
       console.warn("Supabase delete task warning", error);
       return;
     }
   }
-
-  state.tasks = state.tasks.filter((task) => task.id !== taskId);
 }
 
 async function flushRemoteState() {
