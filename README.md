@@ -62,6 +62,8 @@ window.APP_CONFIG = {
 
 Для призначення завдань конкретним користувачам і складності виконай `migrations/003_task_assignment_and_difficulty.sql`.
 
+Для видалення завдань адміном виконай `migrations/004_delete_tasks_policy.sql`.
+
 Для дитячого планшета можна зробити Supabase Auth user і відкривати URL так:
 
 ```txt

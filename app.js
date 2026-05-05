@@ -321,7 +321,7 @@ function renderTasks() {
     .filter((task) => {
       if (isAdminRoute()) return activeFilter === "all" || task.status === activeFilter;
       if (task.targetUserId && task.targetUserId !== currentUser().id) return false;
-      return ["available", "in_progress", "done"].includes(task.status);
+      return ["available", "in_progress"].includes(task.status);
     })
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
@@ -430,10 +430,11 @@ function renderTaskActions(task) {
     return `
       <button class="primary" type="button" data-task-action="approve">Апрувити</button>
       <button class="secondary" type="button" data-task-action="return">Повернути в роботу</button>
+      <button class="danger" type="button" data-task-action="delete">Видалити</button>
     `;
   }
 
-  return "";
+  return isAdmin() ? `<button class="danger" type="button" data-task-action="delete">Видалити</button>` : "";
 }
 
 function renderCompletedToday() {
@@ -1133,6 +1134,12 @@ taskList.addEventListener("click", async (event) => {
   const taskId = card.dataset.taskId;
   const action = button.dataset.taskAction;
 
+  if (action === "delete" && isAdmin()) {
+    await deleteTask(taskId);
+    rerender();
+    return;
+  }
+
   updateTask(taskId, (task) => {
     if (action === "start") {
       task.status = "in_progress";
@@ -1165,6 +1172,18 @@ taskList.addEventListener("click", async (event) => {
   rerender();
   await flushRemoteState();
 });
+
+async function deleteTask(taskId) {
+  if (remote.enabled && canAccessRemoteData()) {
+    const { error } = await remote.client.from("tasks").delete().eq("id", taskId);
+    if (error) {
+      console.warn("Supabase delete task warning", error);
+      return;
+    }
+  }
+
+  state.tasks = state.tasks.filter((task) => task.id !== taskId);
+}
 
 async function flushRemoteState() {
   if (!remote.enabled || !canAccessRemoteData()) return;

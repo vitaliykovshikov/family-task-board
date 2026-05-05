@@ -115,6 +115,7 @@ create policy "update tasks" on tasks
   for update
   using (auth.role() = 'authenticated')
   with check (auth.role() = 'authenticated');
+create policy "admin deletes tasks" on tasks for delete using (is_app_admin());
 
 create policy "read rewards" on rewards for select using (auth.role() = 'authenticated');
 create policy "admin creates rewards" on rewards for insert with check (is_app_admin());
