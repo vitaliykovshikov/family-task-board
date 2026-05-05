@@ -181,6 +181,12 @@ h2 {
   display: block;
 }
 
+.locked-mode .main-tabs,
+.locked-mode .view,
+.locked-mode .user-card {
+  display: none;
+}
+
 label {
   display: grid;
   gap: 7px;
@@ -494,6 +500,17 @@ button:disabled {
   margin: 0;
   color: var(--danger);
   font-weight: 700;
+}
+
+.auth-gate {
+  margin: 0 auto 20px;
+  max-width: 560px;
+  padding: 22px;
+  text-align: center;
+}
+
+.auth-gate h2 {
+  margin-bottom: 8px;
 }
 
 .balance-editor {

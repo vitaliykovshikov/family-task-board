@@ -59,6 +59,9 @@ const rewardForm = document.querySelector("#rewardForm");
 const taskList = document.querySelector("#taskList");
 const rewardList = document.querySelector("#rewardList");
 const usersList = document.querySelector("#usersList");
+const authGate = document.querySelector("#authGate");
+const authGateTitle = document.querySelector("#authGateTitle");
+const authGateText = document.querySelector("#authGateText");
 const adminAuthForm = document.querySelector("#adminAuthForm");
 const authError = document.querySelector("#authError");
 const tabs = document.querySelectorAll("[data-filter]");
@@ -162,7 +165,7 @@ function applyCurrentUserFromUrl() {
 
 function saveState() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  syncRemoteState();
+  if (canAccessRemoteData()) syncRemoteState();
 }
 
 function currentUser() {
@@ -176,6 +179,13 @@ function isAdmin() {
 
 function isAdminRoute() {
   return currentUser()?.role === "admin";
+}
+
+function canAccessRemoteData() {
+  if (!remote.enabled) return true;
+  if (!remote.adminSession) return false;
+  if (isAdminRoute()) return remote.adminAllowed;
+  return true;
 }
 
 function selectedUser() {
@@ -267,6 +277,7 @@ function remainingText(toIso) {
 
 function renderUser() {
   const user = currentUser();
+  document.body.classList.toggle("locked-mode", !canAccessRemoteData());
   document.body.classList.toggle("child-mode", !isAdminRoute());
   document.querySelector("h1").textContent = isAdminRoute()
     ? "Сімейна дошка завдань"
@@ -279,7 +290,15 @@ function renderUser() {
   adminOnlyElements.forEach((element) => {
     element.hidden = !isAdmin();
   });
-  adminAuthForm.hidden = !isAdminRoute() || !remote.enabled || Boolean(remote.adminSession);
+  adminAuthForm.hidden = !isAdminRoute() || !remote.enabled || remote.adminAllowed;
+  authGate.hidden = canAccessRemoteData();
+  authGateTitle.textContent = isAdminRoute() ? "Увійди як адмін" : "Потрібен вхід";
+  authGateText.textContent =
+    isAdminRoute() && remote.adminSession && !remote.adminAllowed
+      ? "Поточний акаунт не доданий у app_admins. Увійди іншим адмінським акаунтом."
+      : isAdminRoute()
+        ? "Введи email і пароль адміна, щоб побачити дані та керувати дошкою."
+        : "Для дитячого планшета додай email і password у URL, щоб сторінка відкривалась одразу.";
 }
 
 function renderTasks() {
@@ -700,6 +719,9 @@ async function initializeRemote() {
     data: { session },
   } = await remote.client.auth.getSession();
   remote.adminSession = session;
+  if (!remote.adminSession) {
+    await autoSignInFromUrl();
+  }
   remote.adminAllowed = await checkAdminAllowed();
 
   remote.client.auth.onAuthStateChange(async (_event, sessionValue) => {
@@ -708,7 +730,22 @@ async function initializeRemote() {
     rerender();
   });
 
-  await loadRemoteState();
+  if (canAccessRemoteData()) await loadRemoteState();
+}
+
+async function autoSignInFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const email = params.get("email");
+  const password = params.get("password");
+  if (!email || !password) return;
+
+  const { data, error } = await remote.client.auth.signInWithPassword({ email, password });
+  if (error) {
+    console.warn("URL sign-in failed", error);
+    return;
+  }
+
+  remote.adminSession = data.session;
 }
 
 async function checkAdminAllowed() {
@@ -719,7 +756,7 @@ async function checkAdminAllowed() {
 }
 
 async function loadRemoteState() {
-  if (!remote.enabled) return;
+  if (!remote.enabled || !canAccessRemoteData()) return;
 
   const [usersResult, tasksResult, rewardsResult, rewardTxResult, purchaseTxResult] = await Promise.all([
     remote.client.from("users").select("*"),
@@ -750,7 +787,7 @@ async function loadRemoteState() {
 }
 
 function syncRemoteState() {
-  if (!remote.enabled || remote.syncInProgress) return;
+  if (!remote.enabled || !canAccessRemoteData() || remote.syncInProgress) return;
 
   remote.syncInProgress = true;
   Promise.allSettled([
@@ -1120,6 +1157,7 @@ setInterval(() => {
 }, 60000);
 
 async function startApp() {
+  applyCurrentUserFromUrl();
   await initializeRemote();
   applyCurrentUserFromUrl();
   rerender();

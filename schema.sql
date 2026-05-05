@@ -98,25 +98,38 @@ alter table reward_transactions enable row level security;
 alter table purchase_transactions enable row level security;
 alter table app_admins enable row level security;
 
-create policy "read users" on users for select using (true);
-create policy "create member users" on users for insert with check (role = 'member' or is_app_admin());
-create policy "update users" on users for update using (role = 'member' or is_app_admin()) with check (role = 'member' or is_app_admin());
+create policy "read users" on users for select using (auth.role() = 'authenticated');
+create policy "create member users" on users
+  for insert
+  with check (auth.role() = 'authenticated' and (role = 'member' or is_app_admin()));
+create policy "update users" on users
+  for update
+  using (auth.role() = 'authenticated' and (role = 'member' or is_app_admin()))
+  with check (auth.role() = 'authenticated' and (role = 'member' or is_app_admin()));
 
-create policy "read tasks" on tasks for select using (true);
+create policy "read tasks" on tasks for select using (auth.role() = 'authenticated');
 create policy "admin creates tasks" on tasks for insert with check (is_app_admin());
-create policy "update tasks" on tasks for update using (true) with check (true);
+create policy "update tasks" on tasks
+  for update
+  using (auth.role() = 'authenticated')
+  with check (auth.role() = 'authenticated');
 
-create policy "read rewards" on rewards for select using (true);
+create policy "read rewards" on rewards for select using (auth.role() = 'authenticated');
 create policy "admin creates rewards" on rewards for insert with check (is_app_admin());
-create policy "update rewards" on rewards for update using (true) with check (true);
+create policy "update rewards" on rewards
+  for update
+  using (auth.role() = 'authenticated')
+  with check (auth.role() = 'authenticated');
 
-create policy "read reward transactions" on reward_transactions for select using (true);
+create policy "read reward transactions" on reward_transactions for select using (auth.role() = 'authenticated');
 create policy "create reward transactions" on reward_transactions
   for insert
-  with check (type = 'task_reward' or is_app_admin());
+  with check (auth.role() = 'authenticated' and (type = 'task_reward' or is_app_admin()));
 
-create policy "read purchases" on purchase_transactions for select using (true);
-create policy "create purchases" on purchase_transactions for insert with check (true);
+create policy "read purchases" on purchase_transactions for select using (auth.role() = 'authenticated');
+create policy "create purchases" on purchase_transactions
+  for insert
+  with check (auth.role() = 'authenticated');
 
 create policy "admins read admin list" on app_admins for select using (is_app_admin());
 
