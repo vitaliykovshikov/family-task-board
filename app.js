@@ -152,8 +152,8 @@ function applyCurrentUserFromUrl() {
     return;
   }
 
-  const userId = userIdFromName(name);
-  let user = state.users.find((item) => item.id === userId);
+  let user = findUserByName(name);
+  const userId = user?.id || userIdFromName(name);
 
   if (!user) {
     user = {
@@ -206,6 +206,15 @@ function selectedUser() {
 
 function userName(userId) {
   return state.users.find((user) => user.id === userId)?.name || "Невідомо";
+}
+
+function findUserByName(name) {
+  const normalizedName = normalizeUserName(name);
+  return state.users.find((user) => normalizeUserName(user.name) === normalizedName);
+}
+
+function normalizeUserName(name) {
+  return String(name).trim().toLowerCase();
 }
 
 function userUrlValue(user) {
@@ -322,7 +331,7 @@ function renderTasks() {
     .filter((task) => !task.deletedAt)
     .filter((task) => {
       if (isAdminRoute()) return activeFilter === "all" || task.status === activeFilter;
-      if (task.targetUserId && task.targetUserId !== currentUser().id) return false;
+      if (task.targetUserId && !isTaskForCurrentUser(task)) return false;
       return ["available", "in_progress"].includes(task.status);
     })
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
@@ -333,6 +342,14 @@ function renderTasks() {
   }
 
   taskList.innerHTML = tasks.map(renderTaskCard).join("");
+}
+
+function isTaskForCurrentUser(task) {
+  if (!task.targetUserId) return true;
+  if (task.targetUserId === currentUser().id) return true;
+
+  const targetUser = state.users.find((user) => user.id === task.targetUserId);
+  return targetUser ? normalizeUserName(targetUser.name) === normalizeUserName(currentUser().name) : false;
 }
 
 function renderTaskCard(task) {
