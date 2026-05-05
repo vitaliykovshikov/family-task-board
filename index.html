@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="uk">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Сімейна дошка завдань</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">MVP</p>
+          <h1>Сімейна дошка завдань</h1>
+        </div>
+        <section class="user-card" aria-label="Поточний користувач">
+          <div>
+            <span class="muted">Користувач</span>
+            <strong id="userName">Адмін</strong>
+          </div>
+          <div>
+            <span class="muted">Роль</span>
+            <strong id="userRole">admin</strong>
+          </div>
+          <div>
+            <span class="muted">Виконано</span>
+            <strong id="completedCount">0</strong>
+          </div>
+          <div>
+            <span class="muted">Баланс</span>
+            <strong id="balance">0</strong>
+          </div>
+          <div>
+            <span class="muted">URL</span>
+            <strong id="userUrlHint">?user=admin</strong>
+          </div>
+        </section>
+      </header>
+
+      <nav class="main-tabs" aria-label="Основні розділи">
+        <button class="main-tab active" type="button" data-view="tasks">Завдання</button>
+        <button class="main-tab" type="button" data-view="shop">Магазин</button>
+        <button class="main-tab" type="button" data-view="users">Користувачі</button>
+      </nav>
+
+      <section class="view active" id="tasksView">
+        <div class="workspace">
+          <form id="taskForm" class="panel task-form" data-admin-only>
+            <div class="panel-header">
+              <h2>Нове завдання</h2>
+              <button type="button" class="ghost" id="resetDemo">Скинути</button>
+            </div>
+
+            <label>
+              Назва
+              <input name="title" type="text" placeholder="Наприклад, прибрати кухню" required maxlength="80" />
+            </label>
+
+            <label>
+              Нагорода
+              <input name="reward" type="number" min="1" step="1" value="10" required />
+            </label>
+
+            <label>
+              Подробиці
+              <textarea name="details" rows="4" placeholder="Що саме треба зробити"></textarea>
+            </label>
+
+            <div class="form-grid">
+              <label>
+                Час від створення
+                <input name="deadlineAmount" type="number" min="1" step="1" value="1" required />
+              </label>
+
+              <label>
+                Одиниця часу
+                <select name="deadlineUnit">
+                  <option value="day">День</option>
+                  <option value="week">Тиждень</option>
+                  <option value="month">Місяць</option>
+                </select>
+              </label>
+            </div>
+
+            <label>
+              Повторюваність
+              <select name="recurrence">
+                <option value="none">Не повторюється</option>
+                <option value="daily">Щодня</option>
+                <option value="weekly">Щотижня</option>
+                <option value="monthly">Щомісяця</option>
+              </select>
+            </label>
+
+            <label class="checkbox-row">
+              <input name="requiresApproval" type="checkbox" checked />
+              Потрібен апрув
+            </label>
+
+            <button type="submit" class="primary">Додати завдання</button>
+          </form>
+
+          <section class="board" aria-label="Дошка завдань">
+            <div class="board-toolbar">
+              <button class="tab active" type="button" data-filter="all">Усі</button>
+              <button class="tab" type="button" data-filter="available">Доступні</button>
+              <button class="tab" type="button" data-filter="in_progress">В процесі</button>
+              <button class="tab" type="button" data-filter="done">На апрув</button>
+              <button class="tab" type="button" data-filter="approved">Завершені</button>
+            </div>
+            <div id="taskList" class="task-list"></div>
+          </section>
+        </div>
+      </section>
+
+      <section class="view" id="shopView">
+        <div class="workspace">
+          <form id="rewardForm" class="panel task-form" data-admin-only>
+            <div class="panel-header">
+              <h2>Нова нагорода</h2>
+              <span class="role-note">admin</span>
+            </div>
+
+            <label>
+              Назва
+              <input name="title" type="text" placeholder="Наприклад, кіно ввечері" required maxlength="80" />
+            </label>
+
+            <label>
+              Опис
+              <textarea name="description" rows="4" placeholder="Що саме отримає користувач"></textarea>
+            </label>
+
+            <div class="form-grid">
+              <label>
+                Вартість
+                <input name="cost" type="number" min="1" step="1" value="20" required />
+              </label>
+
+              <label>
+                Усього доступно
+                <input name="stock" type="number" min="1" step="1" value="1" required />
+              </label>
+            </div>
+
+            <div class="form-grid">
+              <label>
+                Доступно протягом
+                <input name="availableAmount" type="number" min="1" step="1" value="1" required />
+              </label>
+
+              <label>
+                Одиниця часу
+                <select name="availableUnit">
+                  <option value="day">День</option>
+                  <option value="week">Тиждень</option>
+                  <option value="month">Місяць</option>
+                </select>
+              </label>
+            </div>
+
+            <label>
+              Скільки можна купити одному користувачу
+              <input name="perUserLimit" type="number" min="1" step="1" value="1" required />
+            </label>
+
+            <button type="submit" class="primary">Додати нагороду</button>
+          </form>
+
+          <section class="board" aria-label="Магазин нагород">
+            <div class="section-heading">
+              <h2>Магазин</h2>
+              <span class="muted" id="shopSummary"></span>
+            </div>
+            <div id="rewardList" class="task-list"></div>
+          </section>
+        </div>
+      </section>
+
+      <section class="view" id="usersView">
+        <div class="users-layout">
+          <aside class="panel users-list">
+            <div class="panel-header">
+              <h2>Користувачі</h2>
+            </div>
+            <div id="usersList"></div>
+          </aside>
+
+          <section class="panel user-details">
+            <div class="section-heading">
+              <h2 id="selectedUserTitle">Користувач</h2>
+              <span class="muted" id="selectedUserMeta"></span>
+            </div>
+            <div id="selectedUserStats" class="stats-grid"></div>
+            <div class="history-grid">
+              <section>
+                <h3>Що робив</h3>
+                <div id="userTaskHistory" class="history-list"></div>
+              </section>
+              <section>
+                <h3>Що купляв</h3>
+                <div id="userPurchaseHistory" class="history-list"></div>
+              </section>
+              <section>
+                <h3>Валюта</h3>
+                <div id="userCurrencyHistory" class="history-list"></div>
+              </section>
+            </div>
+          </section>
+        </div>
+      </section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>
