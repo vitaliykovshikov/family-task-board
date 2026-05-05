@@ -345,7 +345,7 @@ function renderTasks() {
     .filter((task) => {
       if (isAdminRoute()) return activeFilter === "all" || task.status === activeFilter;
       if (task.status === "available") return isTaskForCurrentUser(task);
-      if (task.status === "in_progress") return task.assignedToUserId === currentUser().id;
+      if (task.status === "in_progress") return isCurrentUserId(task.assignedToUserId);
       return false;
     })
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
@@ -360,10 +360,21 @@ function renderTasks() {
 
 function isTaskForCurrentUser(task) {
   if (!task.targetUserId) return true;
-  if (task.targetUserId === currentUser().id) return true;
+  if (isCurrentUserId(task.targetUserId)) return true;
 
   const targetUser = state.users.find((user) => user.id === task.targetUserId);
-  return targetUser ? normalizeUserName(targetUser.name) === normalizeUserName(currentUser().name) : false;
+  return targetUser ? isCurrentUserName(targetUser.name) : false;
+}
+
+function isCurrentUserId(userId) {
+  const user = currentUser();
+  if (!userId || !user) return false;
+  if (userId === user.id) return true;
+  return userId === userIdFromName(user.name);
+}
+
+function isCurrentUserName(name) {
+  return normalizeUserName(name) === normalizeUserName(currentUser()?.name || "");
 }
 
 function renderTaskCard(task) {
@@ -424,7 +435,7 @@ function renderChildTaskCard(task) {
     ? `<span class="meta-item live-timer" data-started-at="${task.startedAt}">В роботі: ${formatElapsed(task.startedAt, nowIso(), { includeSeconds: true })}</span>`
     : "";
   const ownedByOther =
-    task.assignedToUserId && task.assignedToUserId !== currentUser().id
+    task.assignedToUserId && !isCurrentUserId(task.assignedToUserId)
       ? `<span class="meta-item">Взяв: ${escapeHtml(userName(task.assignedToUserId))}</span>`
       : "";
   const difficulty = `<span class="meta-item">${difficultyLabels[task.difficulty] || difficultyLabels.medium}</span>`;
@@ -455,7 +466,7 @@ function renderTaskActions(task) {
     return `<button class="primary" type="button" data-task-action="start">Взяти</button>`;
   }
 
-  if (task.status === "in_progress" && task.assignedToUserId === currentUser().id) {
+  if (task.status === "in_progress" && isCurrentUserId(task.assignedToUserId)) {
     return `<button class="primary" type="button" data-task-action="complete">Позначити виконаним</button>`;
   }
 
@@ -1285,7 +1296,7 @@ taskList.addEventListener("click", async (event) => {
       changedTask = task;
     }
 
-    if (action === "complete" && task.status === "in_progress" && task.assignedToUserId === currentUser().id) {
+    if (action === "complete" && task.status === "in_progress" && isCurrentUserId(task.assignedToUserId)) {
       task.completedByUserId = currentUser().id;
       task.completedAt = nowIso();
 
@@ -1332,7 +1343,6 @@ async function deleteTask(taskId) {
       .eq("id", taskId);
     if (error) {
       console.warn("Supabase delete task warning", error);
-      return;
     }
   }
 }
@@ -1451,7 +1461,7 @@ async function refreshRemoteData({ silent = false } = {}) {
   if (remote.syncInProgress) return;
 
   refreshTasksButton.disabled = true;
-  if (!silent) refreshTasksButton.textContent = "Оновлюю";
+  if (!silent) refreshTasksButton.classList.add("refreshing");
 
   try {
     await loadRemoteState();
@@ -1459,7 +1469,7 @@ async function refreshRemoteData({ silent = false } = {}) {
     rerender({ save: false });
   } finally {
     refreshTasksButton.disabled = false;
-    refreshTasksButton.textContent = "Оновити";
+    refreshTasksButton.classList.remove("refreshing");
   }
 }
 
