@@ -43,6 +43,23 @@
         <button class="main-tab" type="button" data-view="users">Користувачі</button>
       </nav>
 
+      <form id="adminAuthForm" class="panel admin-auth" hidden>
+        <div>
+          <h2>Вхід адміна</h2>
+          <p class="muted">Адмінські дії доступні після входу через Supabase Auth.</p>
+        </div>
+        <label>
+          Email
+          <input name="email" type="email" autocomplete="email" required />
+        </label>
+        <label>
+          Пароль
+          <input name="password" type="password" autocomplete="current-password" required />
+        </label>
+        <button class="primary" type="submit">Увійти</button>
+        <p class="auth-error" id="authError"></p>
+      </form>
+
       <section class="view active" id="tasksView">
         <div class="workspace">
           <form id="taskForm" class="panel task-form" data-admin-only>
@@ -212,6 +229,8 @@
       </section>
     </main>
 
+    <script src="config.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="app.js"></script>
   </body>
 </html>

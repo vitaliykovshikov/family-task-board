@@ -59,12 +59,20 @@ const rewardForm = document.querySelector("#rewardForm");
 const taskList = document.querySelector("#taskList");
 const rewardList = document.querySelector("#rewardList");
 const usersList = document.querySelector("#usersList");
+const adminAuthForm = document.querySelector("#adminAuthForm");
+const authError = document.querySelector("#authError");
 const tabs = document.querySelectorAll("[data-filter]");
 const mainTabs = document.querySelectorAll("[data-view]");
 const resetDemoButton = document.querySelector("#resetDemo");
 const adminOnlyElements = document.querySelectorAll("[data-admin-only]");
 
-applyCurrentUserFromUrl();
+const remote = {
+  client: null,
+  enabled: false,
+  syncInProgress: false,
+  adminSession: null,
+  adminAllowed: false,
+};
 
 function loadState() {
   const raw = localStorage.getItem(STORAGE_KEY) || localStorage.getItem(LEGACY_STORAGE_KEY);
@@ -154,6 +162,7 @@ function applyCurrentUserFromUrl() {
 
 function saveState() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  syncRemoteState();
 }
 
 function currentUser() {
@@ -161,6 +170,11 @@ function currentUser() {
 }
 
 function isAdmin() {
+  if (currentUser()?.role !== "admin") return false;
+  return !remote.enabled || remote.adminAllowed;
+}
+
+function isAdminRoute() {
   return currentUser()?.role === "admin";
 }
 
@@ -253,8 +267,8 @@ function remainingText(toIso) {
 
 function renderUser() {
   const user = currentUser();
-  document.body.classList.toggle("child-mode", !isAdmin());
-  document.querySelector("h1").textContent = isAdmin()
+  document.body.classList.toggle("child-mode", !isAdminRoute());
+  document.querySelector("h1").textContent = isAdminRoute()
     ? "Сімейна дошка завдань"
     : `Привіт, ${user.name}, ось твої завдання`;
   document.querySelector("#userName").textContent = user.name;
@@ -265,12 +279,13 @@ function renderUser() {
   adminOnlyElements.forEach((element) => {
     element.hidden = !isAdmin();
   });
+  adminAuthForm.hidden = !isAdminRoute() || !remote.enabled || Boolean(remote.adminSession);
 }
 
 function renderTasks() {
   const tasks = state.tasks
     .filter((task) => {
-      if (isAdmin()) return activeFilter === "all" || task.status === activeFilter;
+      if (isAdminRoute()) return activeFilter === "all" || task.status === activeFilter;
       return ["available", "in_progress", "done"].includes(task.status);
     })
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
@@ -284,7 +299,7 @@ function renderTasks() {
 }
 
 function renderTaskCard(task) {
-  if (!isAdmin()) return renderChildTaskCard(task);
+  if (!isAdminRoute()) return renderChildTaskCard(task);
 
   const details = task.details ? `<p class="details">${escapeHtml(task.details)}</p>` : "";
   const approval = task.requiresApproval ? "Потрібен апрув" : "Автоапрув";
@@ -674,6 +689,247 @@ function buyReward(rewardId) {
   });
 }
 
+async function initializeRemote() {
+  const config = window.APP_CONFIG || {};
+  if (!config.supabaseUrl || !config.supabaseAnonKey || !window.supabase) return;
+
+  remote.client = window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey);
+  remote.enabled = true;
+
+  const {
+    data: { session },
+  } = await remote.client.auth.getSession();
+  remote.adminSession = session;
+  remote.adminAllowed = await checkAdminAllowed();
+
+  remote.client.auth.onAuthStateChange(async (_event, sessionValue) => {
+    remote.adminSession = sessionValue;
+    remote.adminAllowed = await checkAdminAllowed();
+    rerender();
+  });
+
+  await loadRemoteState();
+}
+
+async function checkAdminAllowed() {
+  if (!remote.enabled || !remote.adminSession) return false;
+
+  const { data, error } = await remote.client.from("app_admins").select("email").limit(1);
+  return !error && Boolean(data?.length);
+}
+
+async function loadRemoteState() {
+  if (!remote.enabled) return;
+
+  const [usersResult, tasksResult, rewardsResult, rewardTxResult, purchaseTxResult] = await Promise.all([
+    remote.client.from("users").select("*"),
+    remote.client.from("tasks").select("*"),
+    remote.client.from("rewards").select("*"),
+    remote.client.from("reward_transactions").select("*"),
+    remote.client.from("purchase_transactions").select("*"),
+  ]);
+
+  const results = [usersResult, tasksResult, rewardsResult, rewardTxResult, purchaseTxResult];
+  const failed = results.find((result) => result.error);
+  if (failed) {
+    console.warn("Supabase load failed, using local fallback", failed.error);
+    return;
+  }
+
+  const hasRemoteData = results.some((result) => result.data?.length);
+  if (!hasRemoteData) return;
+
+  state = normalizeState({
+    ...state,
+    users: usersResult.data.map(userFromDb),
+    tasks: tasksResult.data.map(taskFromDb),
+    rewards: rewardsResult.data.map(rewardFromDb),
+    rewardTransactions: rewardTxResult.data.map(rewardTransactionFromDb),
+    purchaseTransactions: purchaseTxResult.data.map(purchaseTransactionFromDb),
+  });
+}
+
+function syncRemoteState() {
+  if (!remote.enabled || remote.syncInProgress) return;
+
+  remote.syncInProgress = true;
+  Promise.allSettled([
+    state.users.length ? remote.client.from("users").upsert(state.users.map(userToDb)) : null,
+    state.tasks.length ? remote.client.from("tasks").upsert(state.tasks.map(taskToDb)) : null,
+    state.rewards.length ? remote.client.from("rewards").upsert(state.rewards.map(rewardToDb)) : null,
+    state.rewardTransactions.length
+      ? remote.client.from("reward_transactions").upsert(state.rewardTransactions.map(rewardTransactionToDb))
+      : null,
+    state.purchaseTransactions.length
+      ? remote.client.from("purchase_transactions").upsert(state.purchaseTransactions.map(purchaseTransactionToDb))
+      : null,
+  ])
+    .then((results) => {
+      results.forEach((result) => {
+        if (result.status === "fulfilled" && result.value?.error) {
+          console.warn("Supabase sync warning", result.value.error);
+        }
+      });
+    })
+    .finally(() => {
+      remote.syncInProgress = false;
+    });
+}
+
+function userToDb(user) {
+  return {
+    id: user.id,
+    name: user.name,
+    role: user.role,
+    completed_tasks_count: user.completedTasksCount,
+    balance: user.balance,
+    created_at: user.createdAt,
+    updated_at: user.updatedAt,
+  };
+}
+
+function userFromDb(row) {
+  return {
+    id: row.id,
+    name: row.name,
+    role: row.role,
+    completedTasksCount: row.completed_tasks_count,
+    balance: row.balance,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function taskToDb(task) {
+  return {
+    id: task.id,
+    title: task.title,
+    reward: task.reward,
+    details: task.details || null,
+    deadline_amount: task.deadlineAmount,
+    deadline_unit: task.deadlineUnit,
+    due_at: task.dueAt,
+    requires_approval: task.requiresApproval,
+    recurrence: task.recurrence,
+    status: task.status,
+    created_by_user_id: task.createdByUserId,
+    assigned_to_user_id: task.assignedToUserId,
+    completed_by_user_id: task.completedByUserId,
+    approved_by_user_id: task.approvedByUserId,
+    created_at: task.createdAt,
+    started_at: task.startedAt,
+    completed_at: task.completedAt,
+    approved_at: task.approvedAt,
+    updated_at: task.updatedAt,
+  };
+}
+
+function taskFromDb(row) {
+  return {
+    id: row.id,
+    title: row.title,
+    reward: row.reward,
+    details: row.details || "",
+    deadlineAmount: row.deadline_amount,
+    deadlineUnit: row.deadline_unit,
+    dueAt: row.due_at,
+    requiresApproval: row.requires_approval,
+    recurrence: row.recurrence,
+    status: row.status,
+    createdByUserId: row.created_by_user_id,
+    assignedToUserId: row.assigned_to_user_id,
+    completedByUserId: row.completed_by_user_id,
+    approvedByUserId: row.approved_by_user_id,
+    createdAt: row.created_at,
+    startedAt: row.started_at,
+    completedAt: row.completed_at,
+    approvedAt: row.approved_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function rewardToDb(reward) {
+  return {
+    id: reward.id,
+    title: reward.title,
+    description: reward.description || null,
+    cost: reward.cost,
+    stock: reward.stock,
+    purchased_count: reward.purchasedCount,
+    available_amount: reward.availableAmount,
+    available_unit: reward.availableUnit,
+    available_until: reward.availableUntil,
+    per_user_limit: reward.perUserLimit,
+    created_by_user_id: reward.createdByUserId,
+    created_at: reward.createdAt,
+    updated_at: reward.updatedAt,
+  };
+}
+
+function rewardFromDb(row) {
+  return {
+    id: row.id,
+    title: row.title,
+    description: row.description || "",
+    cost: row.cost,
+    stock: row.stock,
+    purchasedCount: row.purchased_count,
+    availableAmount: row.available_amount,
+    availableUnit: row.available_unit,
+    availableUntil: row.available_until,
+    perUserLimit: row.per_user_limit,
+    createdByUserId: row.created_by_user_id,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function rewardTransactionToDb(transaction) {
+  return {
+    id: transaction.id,
+    user_id: transaction.userId,
+    task_id: transaction.taskId,
+    amount: transaction.amount,
+    type: transaction.type,
+    created_by_user_id: transaction.createdByUserId,
+    created_at: transaction.createdAt,
+  };
+}
+
+function rewardTransactionFromDb(row) {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    taskId: row.task_id,
+    amount: row.amount,
+    type: row.type,
+    createdByUserId: row.created_by_user_id,
+    createdAt: row.created_at,
+  };
+}
+
+function purchaseTransactionToDb(transaction) {
+  return {
+    id: transaction.id,
+    user_id: transaction.userId,
+    reward_id: transaction.rewardId,
+    amount: transaction.amount,
+    type: transaction.type,
+    created_at: transaction.createdAt,
+  };
+}
+
+function purchaseTransactionFromDb(row) {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    rewardId: row.reward_id,
+    amount: row.amount,
+    type: row.type,
+    createdAt: row.created_at,
+  };
+}
+
 taskForm.addEventListener("submit", (event) => {
   event.preventDefault();
   const formData = new FormData(taskForm);
@@ -708,6 +964,38 @@ rewardForm.addEventListener("submit", (event) => {
   rewardForm.elements.availableAmount.value = 1;
   rewardForm.elements.perUserLimit.value = 1;
   rerender();
+});
+
+adminAuthForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (!remote.enabled) return;
+
+  authError.textContent = "";
+  const formData = new FormData(adminAuthForm);
+  const { error } = await remote.client.auth.signInWithPassword({
+    email: formData.get("email"),
+    password: formData.get("password"),
+  });
+
+  if (error) {
+    authError.textContent = "Не вдалося увійти. Перевір email і пароль.";
+    return;
+  }
+
+  adminAuthForm.reset();
+  await initializeRemote();
+  if (!remote.adminAllowed) {
+    authError.textContent = "Цей акаунт не доданий у app_admins.";
+    await remote.client.auth.signOut();
+    return;
+  }
+  applyCurrentUserFromUrl();
+  rerender();
+});
+
+document.querySelector("#userRole").addEventListener("dblclick", async () => {
+  if (!remote.enabled || !remote.adminSession) return;
+  await remote.client.auth.signOut();
 });
 
 taskList.addEventListener("click", (event) => {
@@ -831,4 +1119,11 @@ setInterval(() => {
   if (activeView === "tasks") renderTasks();
 }, 60000);
 
-rerender();
+async function startApp() {
+  await initializeRemote();
+  applyCurrentUserFromUrl();
+  rerender();
+  saveState();
+}
+
+startApp();

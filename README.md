@@ -20,6 +20,8 @@
 
 Відкрий `index.html` у браузері. Дані зберігаються в `localStorage`.
 
+Якщо заповнити `config.js`, дані зберігаються в Supabase і синхронізуються між пристроями.
+
 ## Користувач через URL
 
 - Адмін: `?user=admin`
@@ -31,6 +33,29 @@
 
 Деплой налаштований через GitHub Actions у `.github/workflows/pages.yml`. Після пушу в `main` треба увімкнути Pages для репозиторію з джерелом `GitHub Actions`.
 
+## Supabase
+
+1. Створи Supabase project.
+2. Виконай SQL з `schema.sql` у Supabase SQL Editor.
+3. У `Authentication -> Users` створи адміна з email/password.
+4. Додай email адміна в SQL Editor:
+
+```sql
+insert into app_admins (email)
+values ('admin@example.com');
+```
+
+5. Заповни `config.js`:
+
+```js
+window.APP_CONFIG = {
+  supabaseUrl: "https://your-project-id.supabase.co",
+  supabaseAnonKey: "your-anon-or-publishable-key",
+};
+```
+
+`?user=admin` відкриває адмінський режим, але форми створення/апруву/редагування валюти доступні тільки після входу через Supabase Auth. `?user=Марко` створює або відкриває звичайного користувача без логіну.
+
 ## Наступний технічний крок
 
-Перенести операції `complete -> approve -> reward transaction -> user balance update` в бекенд і виконувати їх в одній транзакції БД.
+Перенести операції `complete -> approve -> reward transaction -> user balance update` та покупки нагород у Supabase RPC або бекенд і виконувати їх в одній транзакції БД.
