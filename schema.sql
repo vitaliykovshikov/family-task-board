@@ -18,10 +18,12 @@ create table tasks (
   due_at timestamptz,
   requires_approval boolean not null default true,
   recurrence text not null default 'none' check (recurrence in ('none', 'daily', 'weekly', 'monthly')),
+  difficulty text not null default 'medium' check (difficulty in ('easy', 'medium', 'hard')),
   status text not null default 'available' check (
     status in ('available', 'in_progress', 'done', 'approved', 'rejected')
   ),
   created_by_user_id text not null references users(id),
+  target_user_id text references users(id),
   assigned_to_user_id text references users(id),
   completed_by_user_id text references users(id),
   approved_by_user_id text references users(id),
@@ -135,6 +137,7 @@ create policy "admins read admin list" on app_admins for select using (is_app_ad
 
 create index tasks_status_idx on tasks(status);
 create index tasks_due_at_idx on tasks(due_at);
+create index tasks_target_user_id_idx on tasks(target_user_id);
 create index tasks_assigned_to_user_id_idx on tasks(assigned_to_user_id);
 create index tasks_created_by_user_id_idx on tasks(created_by_user_id);
 create index reward_transactions_user_id_idx on reward_transactions(user_id);

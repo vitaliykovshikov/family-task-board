@@ -21,6 +21,12 @@ const unitLabels = {
   month: ["місяць", "місяці", "місяців"],
 };
 
+const difficultyLabels = {
+  easy: "Просте",
+  medium: "Середнє",
+  hard: "Складне",
+};
+
 const seedState = {
   currentUserId: "user_admin_1",
   selectedUserId: "user_admin_1",
@@ -66,6 +72,7 @@ const authGateTitle = document.querySelector("#authGateTitle");
 const authGateText = document.querySelector("#authGateText");
 const adminAuthForm = document.querySelector("#adminAuthForm");
 const authError = document.querySelector("#authError");
+const taskTargetUser = document.querySelector("#taskTargetUser");
 const tabs = document.querySelectorAll("[data-filter]");
 const mainTabs = document.querySelectorAll("[data-view]");
 const resetDemoButton = document.querySelector("#resetDemo");
@@ -120,6 +127,8 @@ function normalizeState(nextState) {
       deadlineUnit,
       dueAt: task.dueAt || (deadlineAmount ? addDuration(task.createdAt || nowIso(), deadlineAmount, deadlineUnit) : null),
       assignedToUserId: task.assignedToUserId || null,
+      targetUserId: task.targetUserId || null,
+      difficulty: task.difficulty || "medium",
       startedAt: task.startedAt || null,
       completedByUserId: task.completedByUserId || null,
       approvedByUserId: task.approvedByUserId || null,
@@ -257,17 +266,20 @@ function formatDuration(amount, unit) {
   return `${value} ${form}`;
 }
 
-function formatElapsed(fromIso, toIso = nowIso()) {
+function formatElapsed(fromIso, toIso = nowIso(), { includeSeconds = false } = {}) {
   if (!fromIso) return "";
 
   const diffMs = Math.max(0, new Date(toIso) - new Date(fromIso));
-  const totalMinutes = Math.floor(diffMs / 60000);
+  const totalSeconds = Math.floor(diffMs / 1000);
+  const seconds = totalSeconds % 60;
+  const totalMinutes = Math.floor(totalSeconds / 60);
   const days = Math.floor(totalMinutes / 1440);
   const hours = Math.floor((totalMinutes % 1440) / 60);
   const minutes = totalMinutes % 60;
 
   if (days > 0) return `${days} д ${hours} год`;
-  if (hours > 0) return `${hours} год ${minutes} хв`;
+  if (hours > 0) return includeSeconds ? `${hours} год ${minutes} хв ${seconds} с` : `${hours} год ${minutes} хв`;
+  if (includeSeconds) return `${minutes} хв ${seconds} с`;
   return `${minutes} хв`;
 }
 
@@ -308,6 +320,7 @@ function renderTasks() {
   const tasks = state.tasks
     .filter((task) => {
       if (isAdminRoute()) return activeFilter === "all" || task.status === activeFilter;
+      if (task.targetUserId && task.targetUserId !== currentUser().id) return false;
       return ["available", "in_progress", "done"].includes(task.status);
     })
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
@@ -334,6 +347,8 @@ function renderTaskCard(task) {
   const completed = task.completedAt
     ? `<span class="meta-item">Виконано: ${formatDate(task.completedAt)}</span>`
     : "";
+  const target = task.targetUserId ? `<span class="meta-item">Для: ${escapeHtml(userName(task.targetUserId))}</span>` : "";
+  const difficulty = `<span class="meta-item">${difficultyLabels[task.difficulty] || difficultyLabels.medium}</span>`;
   const deadline = task.dueAt
     ? `
         <span class="meta-item">Дедлайн: ${formatDuration(task.deadlineAmount, task.deadlineUnit)}</span>
@@ -350,10 +365,12 @@ function renderTaskCard(task) {
       ${details}
       <div class="task-meta">
         <span class="meta-item">Нагорода: ${task.reward}</span>
+        ${difficulty}
         ${deadline}
         <span class="meta-item">${approval}</span>
         <span class="meta-item">${recurrenceLabels[task.recurrence]}</span>
         ${assignee}
+        ${target}
         ${started}
         ${completed}
       </div>
@@ -371,12 +388,13 @@ function renderChildTaskCard(task) {
       ? `<span class="meta-item">${recurrenceLabels[task.recurrence]}</span>`
       : "";
   const started = task.startedAt
-    ? `<span class="meta-item live-timer" data-started-at="${task.startedAt}">В роботі: ${formatElapsed(task.startedAt)}</span>`
+    ? `<span class="meta-item live-timer" data-started-at="${task.startedAt}">В роботі: ${formatElapsed(task.startedAt, nowIso(), { includeSeconds: true })}</span>`
     : "";
   const ownedByOther =
     task.assignedToUserId && task.assignedToUserId !== currentUser().id
       ? `<span class="meta-item">Взяв: ${escapeHtml(userName(task.assignedToUserId))}</span>`
       : "";
+  const difficulty = `<span class="meta-item">${difficultyLabels[task.difficulty] || difficultyLabels.medium}</span>`;
 
   return `
     <article class="task-card child-task-card status-${task.status}" data-task-id="${task.id}">
@@ -387,6 +405,7 @@ function renderChildTaskCard(task) {
       ${details}
       <div class="task-meta">
         ${task.dueAt ? `<span class="meta-item">${remainingText(task.dueAt)}</span>` : ""}
+        ${difficulty}
         ${recurrence}
         ${started}
         ${ownedByOther}
@@ -399,7 +418,7 @@ function renderChildTaskCard(task) {
 }
 
 function renderTaskActions(task) {
-  if (task.status === "available") {
+  if (task.status === "available" && (!task.targetUserId || task.targetUserId === currentUser().id)) {
     return `<button class="primary" type="button" data-task-action="start">Взяти</button>`;
   }
 
@@ -519,6 +538,8 @@ function getRewardDisabledReason({ isExpired, isSoldOut, limitReached, reward })
 }
 
 function renderUsers() {
+  renderTaskTargetOptions();
+
   usersList.innerHTML = state.users
     .map((user) => {
       const isSelected = user.id === selectedUser().id;
@@ -535,6 +556,16 @@ function renderUsers() {
     .join("");
 
   renderSelectedUser();
+}
+
+function renderTaskTargetOptions() {
+  const currentValue = taskTargetUser.value;
+  const members = state.users.filter((user) => user.role === "member");
+  taskTargetUser.innerHTML = `
+    <option value="">Для будь-кого</option>
+    ${members.map((user) => `<option value="${user.id}">${escapeHtml(user.name)}</option>`).join("")}
+  `;
+  taskTargetUser.value = members.some((user) => user.id === currentValue) ? currentValue : "";
 }
 
 function renderSelectedUser() {
@@ -659,6 +690,8 @@ function addTask(formData) {
     title: formData.get("title").trim(),
     reward: Number(formData.get("reward")),
     details: formData.get("details").trim(),
+    targetUserId: formData.get("targetUserId") || null,
+    difficulty: formData.get("difficulty") || "medium",
     deadlineAmount,
     deadlineUnit,
     dueAt: deadlineAmount ? addDuration(createdAt, deadlineAmount, deadlineUnit) : null,
@@ -844,27 +877,25 @@ function syncRemoteState() {
   if (!remote.enabled || !canAccessRemoteData() || remote.syncInProgress) return;
 
   remote.syncInProgress = true;
-  Promise.allSettled([
-    state.users.length ? remote.client.from("users").upsert(state.users.map(userToDb)) : null,
-    state.tasks.length ? remote.client.from("tasks").upsert(state.tasks.map(taskToDb)) : null,
-    state.rewards.length ? remote.client.from("rewards").upsert(state.rewards.map(rewardToDb)) : null,
-    state.rewardTransactions.length
-      ? remote.client.from("reward_transactions").upsert(state.rewardTransactions.map(rewardTransactionToDb))
-      : null,
-    state.purchaseTransactions.length
-      ? remote.client.from("purchase_transactions").upsert(state.purchaseTransactions.map(purchaseTransactionToDb))
-      : null,
-  ])
-    .then((results) => {
-      results.forEach((result) => {
-        if (result.status === "fulfilled" && result.value?.error) {
-          console.warn("Supabase sync warning", result.value.error);
-        }
-      });
-    })
+  syncRemoteStateSequentially()
     .finally(() => {
       remote.syncInProgress = false;
     });
+}
+
+async function syncRemoteStateSequentially() {
+  const operations = [
+    state.users.length ? ["users", state.users.map(userToDb)] : null,
+    state.tasks.length ? ["tasks", state.tasks.map(taskToDb)] : null,
+    state.rewards.length ? ["rewards", state.rewards.map(rewardToDb)] : null,
+    state.rewardTransactions.length ? ["reward_transactions", state.rewardTransactions.map(rewardTransactionToDb)] : null,
+    state.purchaseTransactions.length ? ["purchase_transactions", state.purchaseTransactions.map(purchaseTransactionToDb)] : null,
+  ].filter(Boolean);
+
+  for (const [table, rows] of operations) {
+    const { error } = await remote.client.from(table).upsert(rows);
+    if (error) console.warn(`Supabase sync warning: ${table}`, error);
+  }
 }
 
 function userToDb(user) {
@@ -900,6 +931,8 @@ function taskToDb(task) {
     deadline_amount: task.deadlineAmount,
     deadline_unit: task.deadlineUnit,
     due_at: task.dueAt,
+    target_user_id: task.targetUserId,
+    difficulty: task.difficulty,
     requires_approval: task.requiresApproval,
     recurrence: task.recurrence,
     status: task.status,
@@ -924,6 +957,8 @@ function taskFromDb(row) {
     deadlineAmount: row.deadline_amount,
     deadlineUnit: row.deadline_unit,
     dueAt: row.due_at,
+    targetUserId: row.target_user_id,
+    difficulty: row.difficulty || "medium",
     requiresApproval: row.requires_approval,
     recurrence: row.recurrence,
     status: row.status,
@@ -1090,7 +1125,7 @@ document.querySelector("#userRole").addEventListener("dblclick", async () => {
   await remote.client.auth.signOut();
 });
 
-taskList.addEventListener("click", (event) => {
+taskList.addEventListener("click", async (event) => {
   const button = event.target.closest("button[data-task-action]");
   if (!button) return;
 
@@ -1128,7 +1163,23 @@ taskList.addEventListener("click", (event) => {
   });
 
   rerender();
+  await flushRemoteState();
 });
+
+async function flushRemoteState() {
+  if (!remote.enabled || !canAccessRemoteData()) return;
+
+  while (remote.syncInProgress) {
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+
+  remote.syncInProgress = true;
+  try {
+    await syncRemoteStateSequentially();
+  } finally {
+    remote.syncInProgress = false;
+  }
+}
 
 rewardList.addEventListener("click", (event) => {
   const button = event.target.closest("button[data-reward-action='buy']");
@@ -1214,7 +1265,7 @@ setInterval(updateLiveTimers, 1000);
 
 function updateLiveTimers() {
   document.querySelectorAll("[data-started-at]").forEach((element) => {
-    element.textContent = `В роботі: ${formatElapsed(element.dataset.startedAt)}`;
+    element.textContent = `В роботі: ${formatElapsed(element.dataset.startedAt, nowIso(), { includeSeconds: true })}`;
   });
 }
 

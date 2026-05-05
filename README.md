@@ -60,6 +60,8 @@ window.APP_CONFIG = {
 
 Якщо схема вже була створена до того, як дедлайн завдання став опціональним, також виконай `migrations/002_optional_task_deadline.sql`.
 
+Для призначення завдань конкретним користувачам і складності виконай `migrations/003_task_assignment_and_difficulty.sql`.
+
 Для дитячого планшета можна зробити Supabase Auth user і відкривати URL так:
 
 ```txt

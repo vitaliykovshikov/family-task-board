@@ -91,6 +91,24 @@
 
             <div class="form-grid">
               <label>
+                Для кого
+                <select name="targetUserId" id="taskTargetUser">
+                  <option value="">Для будь-кого</option>
+                </select>
+              </label>
+
+              <label>
+                Складність
+                <select name="difficulty">
+                  <option value="easy">Просте</option>
+                  <option value="medium" selected>Середнє</option>
+                  <option value="hard">Складне</option>
+                </select>
+              </label>
+            </div>
+
+            <div class="form-grid">
+              <label>
                 Час від створення
                 <input name="deadlineAmount" type="number" min="1" step="1" placeholder="Без дедлайну" />
               </label>
