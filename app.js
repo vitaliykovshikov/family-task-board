@@ -120,18 +120,36 @@ function applyCurrentUserFromUrl() {
   const requestedUser = new URLSearchParams(window.location.search).get("user");
   if (!requestedUser) return;
 
-  const aliases = {
-    admin: "user_admin_1",
-    child: "user_child_1",
-    kid: "user_child_1",
-    member: "user_child_1",
-  };
-  const userId = aliases[requestedUser] || requestedUser;
+  const name = requestedUser.trim();
+  if (!name) return;
 
-  if (state.users.some((user) => user.id === userId)) {
-    state.currentUserId = userId;
-    state.selectedUserId = userId;
+  if (name.toLowerCase() === "admin") {
+    state.currentUserId = "user_admin_1";
+    state.selectedUserId = "user_admin_1";
+    return;
   }
+
+  const userId = userIdFromName(name);
+  let user = state.users.find((item) => item.id === userId);
+
+  if (!user) {
+    user = {
+      id: userId,
+      name,
+      role: "member",
+      completedTasksCount: 0,
+      balance: 0,
+      createdAt: nowIso(),
+      updatedAt: nowIso(),
+    };
+    state.users.push(user);
+  } else if (user.name !== name) {
+    user.name = name;
+    user.updatedAt = nowIso();
+  }
+
+  state.currentUserId = userId;
+  state.selectedUserId = userId;
 }
 
 function saveState() {
@@ -152,6 +170,23 @@ function selectedUser() {
 
 function userName(userId) {
   return state.users.find((user) => user.id === userId)?.name || "Невідомо";
+}
+
+function userUrlValue(user) {
+  if (user.id === "user_admin_1") return "admin";
+  return encodeURIComponent(user.name);
+}
+
+function userIdFromName(name) {
+  const slug = name
+    .trim()
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9а-яіїєґ]+/gi, "_")
+    .replace(/^_+|_+$/g, "");
+
+  return `user_${slug || createId("member")}`;
 }
 
 function createId(prefix) {
@@ -219,11 +254,14 @@ function remainingText(toIso) {
 function renderUser() {
   const user = currentUser();
   document.body.classList.toggle("child-mode", !isAdmin());
+  document.querySelector("h1").textContent = isAdmin()
+    ? "Сімейна дошка завдань"
+    : `Привіт, ${user.name}, ось твої завдання`;
   document.querySelector("#userName").textContent = user.name;
   document.querySelector("#userRole").textContent = user.role;
   document.querySelector("#completedCount").textContent = user.completedTasksCount;
   document.querySelector("#balance").textContent = user.balance;
-  document.querySelector("#userUrlHint").textContent = user.id === "user_admin_1" ? "?user=admin" : "?user=child";
+  document.querySelector("#userUrlHint").textContent = `?user=${userUrlValue(user)}`;
   adminOnlyElements.forEach((element) => {
     element.hidden = !isAdmin();
   });
@@ -402,7 +440,7 @@ function renderUsers() {
         <button class="user-row ${isSelected ? "active" : ""}" type="button" data-user-id="${user.id}">
           <span>
             <strong>${escapeHtml(user.name)}</strong>
-            <span class="muted">${user.role} · ${user.id === "user_admin_1" ? "?user=admin" : "?user=child"}</span>
+            <span class="muted">${user.role} · ?user=${escapeHtml(userUrlValue(user))}</span>
           </span>
           <span class="balance-chip">${user.balance}</span>
         </button>
@@ -431,6 +469,7 @@ function renderSelectedUser() {
     <div class="stat-card"><span class="muted">В роботі/історія</span><strong>${assignedTasks.length}</strong></div>
     <div class="stat-card"><span class="muted">Покупки</span><strong>${purchases.length}</strong></div>
   `;
+  document.querySelector("#balanceEditorSlot").innerHTML = renderBalanceEditor(user);
 
   document.querySelector("#userTaskHistory").innerHTML = renderHistory(
     assignedTasks
@@ -473,6 +512,20 @@ function renderHistory(items, emptyText) {
   return items.length ? items.join("") : `<div class="empty-state compact">${emptyText}</div>`;
 }
 
+function renderBalanceEditor(user) {
+  if (!isAdmin() || user.role === "admin") return "";
+
+  return `
+    <form class="balance-editor" data-balance-user-id="${user.id}">
+      <label>
+        Валюта користувача
+        <input name="balance" type="number" step="1" value="${user.balance}" />
+      </label>
+      <button class="primary" type="submit">Оновити валюту</button>
+    </form>
+  `;
+}
+
 function rewardTitle(rewardId) {
   return state.rewards.find((reward) => reward.id === rewardId)?.title || "Нагорода";
 }
@@ -484,6 +537,7 @@ function taskTitle(taskId) {
 function currencyEventLabel(event) {
   if (event.type === "task_reward") return taskTitle(event.taskId);
   if (event.type === "reward_purchase") return rewardTitle(event.rewardId);
+  if (event.type === "manual_adjustment") return "Корекція адміном";
   return event.type;
 }
 
@@ -710,6 +764,34 @@ usersList.addEventListener("click", (event) => {
   if (!button) return;
 
   state.selectedUserId = button.dataset.userId;
+  rerender();
+});
+
+document.querySelector("#usersView").addEventListener("submit", (event) => {
+  const form = event.target.closest("[data-balance-user-id]");
+  if (!form || !isAdmin()) return;
+
+  event.preventDefault();
+  const user = state.users.find((item) => item.id === form.dataset.balanceUserId);
+  const nextBalance = Number(new FormData(form).get("balance"));
+  if (!user || !Number.isFinite(nextBalance)) return;
+
+  const delta = nextBalance - user.balance;
+  user.balance = nextBalance;
+  user.updatedAt = nowIso();
+
+  if (delta !== 0) {
+    state.rewardTransactions.push({
+      id: createId("reward_tx"),
+      userId: user.id,
+      taskId: null,
+      amount: delta,
+      type: "manual_adjustment",
+      createdByUserId: currentUser().id,
+      createdAt: nowIso(),
+    });
+  }
+
   rerender();
 });
 

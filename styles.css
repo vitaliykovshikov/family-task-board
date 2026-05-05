@@ -476,6 +476,18 @@ button:disabled {
   font-size: 13px;
 }
 
+.balance-editor {
+  display: grid;
+  grid-template-columns: minmax(0, 220px) auto;
+  gap: 12px;
+  align-items: end;
+  margin: -6px 0 22px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-soft);
+  padding: 14px;
+}
+
 @media (max-width: 880px) {
   .topbar,
   .workspace,

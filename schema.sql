@@ -53,7 +53,7 @@ create table reward_transactions (
   id uuid primary key,
   user_id uuid not null references users(id),
   task_id uuid references tasks(id),
-  amount integer not null check (amount > 0),
+  amount integer not null,
   type text not null check (type in ('task_reward', 'manual_adjustment')),
   created_by_user_id uuid not null references users(id),
   created_at timestamptz not null default now()
