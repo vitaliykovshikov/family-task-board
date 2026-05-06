@@ -428,7 +428,7 @@ function renderTasks() {
       if (task.status === "in_progress") return isCurrentUserId(task.assignedToUserId);
       return false;
     })
-    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    .sort(sortTasksForCurrentView);
 
   if (tasks.length === 0) {
     taskList.innerHTML = '<div class="empty-state">Тут поки немає завдань</div>';
@@ -444,6 +444,20 @@ function isTaskForCurrentUser(task) {
 
   const targetUser = state.users.find((user) => user.id === task.targetUserId);
   return targetUser ? isCurrentUserName(targetUser.name) : false;
+}
+
+function isTaskPersonalForCurrentUser(task) {
+  if (!normalizeOptionalId(task.targetUserId)) return false;
+  return isTaskForCurrentUser(task);
+}
+
+function sortTasksForCurrentView(a, b) {
+  if (!isAdminRoute()) {
+    const personalDiff = Number(isTaskPersonalForCurrentUser(b)) - Number(isTaskPersonalForCurrentUser(a));
+    if (personalDiff !== 0) return personalDiff;
+  }
+
+  return new Date(b.createdAt) - new Date(a.createdAt);
 }
 
 function isCurrentUserId(userId) {
@@ -508,6 +522,7 @@ function renderTaskCard(task) {
 function renderChildTaskCard(task) {
   const details = task.details ? `<p class="details">${escapeHtml(task.details)}</p>` : "";
   const visual = taskVisual(task);
+  const isPersonal = isTaskPersonalForCurrentUser(task);
   const recurrence =
     task.recurrence && task.recurrence !== "none"
       ? `<span class="meta-item">${taskMetaIcon("repeat")} ${recurrenceLabels[task.recurrence]}</span>`
@@ -523,8 +538,9 @@ function renderChildTaskCard(task) {
   const dueAt = task.dueAt ? `<span class="meta-item">${taskMetaIcon("calendar")} ${remainingText(task.dueAt)}</span>` : "";
 
   return `
-    <article class="task-card child-task-card status-${task.status} visual-${visual.theme}" data-task-id="${task.id}">
+    <article class="task-card child-task-card status-${task.status} visual-${visual.theme} ${isPersonal ? "personal-task" : ""}" data-task-id="${task.id}">
       <span class="pin" aria-hidden="true"></span>
+      ${isPersonal ? `<div class="personal-badge"><span aria-hidden="true">🎯</span> Для тебе</div>` : ""}
       <div class="child-task-top">
         <div class="task-visual" aria-hidden="true">${visual.icon}</div>
         <div class="child-reward"><strong>${task.reward}</strong><span>балів</span></div>
