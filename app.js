@@ -344,6 +344,27 @@ async function syncRenewedTasks(tasks) {
   }
 }
 
+async function syncRemoteRepairs({ renewedTasks = [], reconciledRewards = false }) {
+  if (!renewedTasks.length && !reconciledRewards) return;
+  if (!remote.enabled || !canAccessRemoteData()) return;
+  if (isAdmin()) {
+    await flushRemoteState();
+    return;
+  }
+
+  await syncRenewedTasks(renewedTasks);
+  if (reconciledRewards) {
+    const user = currentUser();
+    if (user) await remote.client.from("users").upsert(userToDb(user));
+    const taskRewardTransactions = state.rewardTransactions.filter(
+      (transaction) => transaction.type === "task_reward" && transaction.userId === user?.id,
+    );
+    if (taskRewardTransactions.length) {
+      await remote.client.from("reward_transactions").upsert(taskRewardTransactions.map(rewardTransactionToDb));
+    }
+  }
+}
+
 function formatDate(value) {
   if (!value) return "";
   return new Intl.DateTimeFormat("uk-UA", {
@@ -634,12 +655,14 @@ function renderCompletedToday() {
         ["done", "approved"].includes(task.status),
     )
     .sort((a, b) => new Date(b.completedAt) - new Date(a.completedAt));
-  const earned = state.rewardTransactions
-    .filter((transaction) => transaction.userId === currentUser().id && transaction.type === "task_reward")
-    .filter((transaction) => isToday(transaction.createdAt))
-    .reduce((sum, transaction) => sum + transaction.amount, 0);
+  const earned = todayTasks
+    .filter((task) => task.status === "approved")
+    .reduce((sum, task) => sum + task.reward, 0);
+  const pending = todayTasks
+    .filter((task) => task.status === "done")
+    .reduce((sum, task) => sum + task.reward, 0);
 
-  todayEarned.textContent = `${earned} балів`;
+  todayEarned.textContent = pending ? `${earned} зараховано · ${pending} на апруві` : `${earned} балів`;
 
   if (!todayTasks.length) {
     completedTodayList.innerHTML = '<div class="empty-state">Сьогодні ще немає виконаних завдань</div>';
@@ -995,12 +1018,29 @@ function updateTask(taskId, updater) {
 function approveTask(task) {
   if (task.status === "approved") return;
 
-  const user = state.users.find((item) => item.id === task.completedByUserId);
+  const user = findTaskCompletionUser(task);
   if (!user) return;
 
   task.status = "approved";
   task.approvedByUserId = currentUser().id;
   task.approvedAt = nowIso();
+
+  awardTaskRewardOnce(task, user);
+}
+
+function findTaskCompletionUser(task) {
+  return (
+    state.users.find((item) => item.id === task.completedByUserId) ||
+    state.users.find((item) => item.id === task.assignedToUserId) ||
+    null
+  );
+}
+
+function awardTaskRewardOnce(task, user) {
+  const existingReward = state.rewardTransactions.find(
+    (transaction) => transaction.type === "task_reward" && transaction.taskId === task.id && transaction.userId === user.id,
+  );
+  if (existingReward) return;
 
   state.rewardTransactions.push({
     id: createId("reward_tx"),
@@ -1011,10 +1051,25 @@ function approveTask(task) {
     createdByUserId: currentUser().id,
     createdAt: nowIso(),
   });
-
   user.balance += task.reward;
   user.completedTasksCount += 1;
   user.updatedAt = nowIso();
+}
+
+function reconcileApprovedTaskRewards() {
+  let changed = false;
+
+  state.tasks.forEach((task) => {
+    if (task.deletedAt || task.status !== "approved") return;
+    const user = findTaskCompletionUser(task);
+    if (!user) return;
+
+    const beforeCount = state.rewardTransactions.length;
+    awardTaskRewardOnce(task, user);
+    if (state.rewardTransactions.length !== beforeCount) changed = true;
+  });
+
+  return changed;
 }
 
 function buyReward(rewardId) {
@@ -1462,9 +1517,29 @@ taskList.addEventListener("click", async (event) => {
   if (isAdmin()) {
     await flushRemoteState();
   } else if (changedTask) {
-    await updateRemoteTask(changedTask);
+    await syncMemberTaskCompletion(changedTask);
   }
 });
+
+async function syncMemberTaskCompletion(task) {
+  await updateRemoteTask(task);
+  if (!remote.enabled || !canAccessRemoteData() || !task || task.status !== "approved") return;
+
+  const user = findTaskCompletionUser(task);
+  const rewardTransaction = state.rewardTransactions.find(
+    (transaction) => transaction.type === "task_reward" && transaction.taskId === task.id && transaction.userId === user?.id,
+  );
+
+  if (user) {
+    const { error } = await remote.client.from("users").upsert(userToDb(user));
+    if (error) console.warn("Supabase user reward sync warning", error);
+  }
+
+  if (rewardTransaction) {
+    const { error } = await remote.client.from("reward_transactions").upsert(rewardTransactionToDb(rewardTransaction));
+    if (error) console.warn("Supabase reward transaction sync warning", error);
+  }
+}
 
 async function deleteTask(taskId) {
   const task = state.tasks.find((item) => item.id === taskId);
@@ -1603,10 +1678,11 @@ async function refreshRemoteData({ silent = false } = {}) {
   try {
     await loadRemoteState();
     applyCurrentUserFromUrl();
+    const reconciledRewards = reconcileApprovedTaskRewards();
     const renewedTasks = renewRecurringTasks();
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     rerender({ save: false });
-    await syncRenewedTasks(renewedTasks);
+    await syncRemoteRepairs({ renewedTasks, reconciledRewards });
   } finally {
     refreshTasksButton.disabled = false;
     refreshTasksButton.classList.remove("refreshing");
@@ -1618,14 +1694,16 @@ async function startApp() {
     applyCurrentUserFromUrl();
     await initializeRemote();
     applyCurrentUserFromUrl();
+    const reconciledRewards = reconcileApprovedTaskRewards();
     const renewedTasks = renewRecurringTasks();
     rerender();
-    await syncRenewedTasks(renewedTasks);
+    await syncRemoteRepairs({ renewedTasks, reconciledRewards });
     saveState();
   } catch (error) {
     console.warn("App start warning", error);
     remote.enabled = false;
     applyCurrentUserFromUrl();
+    reconcileApprovedTaskRewards();
     renewRecurringTasks();
     rerender();
   }
