@@ -147,7 +147,11 @@ function normalizeState(nextState) {
 
 function applyCurrentUserFromUrl() {
   const requestedUser = new URLSearchParams(window.location.search).get("user");
-  if (!requestedUser) return;
+  if (!requestedUser) {
+    state.currentUserId = "user_admin_1";
+    state.selectedUserId = "user_admin_1";
+    return;
+  }
 
   const name = requestedUser.trim();
   if (!name) return;
@@ -1474,11 +1478,18 @@ async function refreshRemoteData({ silent = false } = {}) {
 }
 
 async function startApp() {
-  applyCurrentUserFromUrl();
-  await initializeRemote();
-  applyCurrentUserFromUrl();
-  rerender();
-  saveState();
+  try {
+    applyCurrentUserFromUrl();
+    await initializeRemote();
+    applyCurrentUserFromUrl();
+    rerender();
+    saveState();
+  } catch (error) {
+    console.warn("App start warning", error);
+    remote.enabled = false;
+    applyCurrentUserFromUrl();
+    rerender();
+  }
 }
 
 startApp();
