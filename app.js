@@ -540,10 +540,12 @@ function renderChildTaskCard(task) {
   return `
     <article class="task-card child-task-card status-${task.status} visual-${visual.theme} ${isPersonal ? "personal-task" : ""}" data-task-id="${task.id}">
       <span class="pin" aria-hidden="true"></span>
-      ${isPersonal ? `<div class="personal-badge"><span aria-hidden="true">🎯</span> Для тебе</div>` : ""}
       <div class="child-task-top">
         <div class="task-visual" aria-hidden="true">${visual.icon}</div>
-        <div class="child-reward"><strong>${task.reward}</strong><span>балів</span></div>
+        <div class="child-card-side">
+          ${isPersonal ? `<div class="personal-badge"><span aria-hidden="true">🎯</span> Для тебе</div>` : ""}
+          <div class="child-reward"><strong>${task.reward}</strong><span>балів</span></div>
+        </div>
       </div>
       <div class="child-task-copy">
         <h3 class="task-title">${escapeHtml(task.title)}</h3>
