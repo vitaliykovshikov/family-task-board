@@ -395,16 +395,16 @@ function renderUser() {
   document.body.classList.remove("booting");
   document.body.classList.toggle("locked-mode", !canAccessRemoteData());
   document.body.classList.toggle("child-mode", !isAdminRoute());
-  document.querySelector("h1").textContent = isAdminRoute()
+  document.querySelector("h1").innerHTML = isAdminRoute()
     ? "Сімейна дошка завдань"
-    : `Привіт, ${user.name}, ось твої завдання`;
+    : `Привіт, ${escapeHtml(user.name)}! <span aria-hidden="true">👋</span><small>Ось твої завдання на сьогодні</small>`;
   document.querySelector("#userName").textContent = user.name;
   document.querySelector("#userRole").textContent = user.role;
   document.querySelector("#completedCount").textContent = user.completedTasksCount;
   document.querySelector("#balance").textContent = user.balance;
   document.querySelector("#userUrlHint").textContent = `?user=${userUrlValue(user)}`;
   childBalance.hidden = isAdminRoute() || !canAccessRemoteData();
-  childBalance.textContent = `${user.balance} балів`;
+  childBalance.innerHTML = `<span aria-hidden="true">⭐</span> ${user.balance} балів`;
   adminOnlyElements.forEach((element) => {
     element.hidden = !isAdmin();
   });
@@ -507,28 +507,34 @@ function renderTaskCard(task) {
 
 function renderChildTaskCard(task) {
   const details = task.details ? `<p class="details">${escapeHtml(task.details)}</p>` : "";
+  const visual = taskVisual(task);
   const recurrence =
     task.recurrence && task.recurrence !== "none"
-      ? `<span class="meta-item">${recurrenceLabels[task.recurrence]}</span>`
+      ? `<span class="meta-item">${taskMetaIcon("repeat")} ${recurrenceLabels[task.recurrence]}</span>`
       : "";
   const started = task.startedAt
-    ? `<span class="meta-item live-timer" data-started-at="${task.startedAt}">В роботі: ${formatElapsed(task.startedAt, nowIso(), { includeSeconds: true })}</span>`
+    ? `<span class="meta-item live-timer" data-started-at="${task.startedAt}">${taskMetaIcon("timer")} В роботі: ${formatElapsed(task.startedAt, nowIso(), { includeSeconds: true })}</span>`
     : "";
   const ownedByOther =
     task.assignedToUserId && !isCurrentUserId(task.assignedToUserId)
       ? `<span class="meta-item">Взяв: ${escapeHtml(userName(task.assignedToUserId))}</span>`
       : "";
-  const difficulty = `<span class="meta-item">${difficultyLabels[task.difficulty] || difficultyLabels.medium}</span>`;
+  const difficulty = `<span class="meta-item">${taskMetaIcon("difficulty")} ${difficultyLabels[task.difficulty] || difficultyLabels.medium}</span>`;
+  const dueAt = task.dueAt ? `<span class="meta-item">${taskMetaIcon("calendar")} ${remainingText(task.dueAt)}</span>` : "";
 
   return `
-    <article class="task-card child-task-card status-${task.status}" data-task-id="${task.id}">
-      <div class="task-header">
-        <h3 class="task-title">${escapeHtml(task.title)}</h3>
+    <article class="task-card child-task-card status-${task.status} visual-${visual.theme}" data-task-id="${task.id}">
+      <span class="pin" aria-hidden="true"></span>
+      <div class="child-task-top">
+        <div class="task-visual" aria-hidden="true">${visual.icon}</div>
+        <div class="child-reward"><strong>${task.reward}</strong><span>балів</span></div>
       </div>
-      <div class="child-reward">${task.reward}</div>
-      ${details}
+      <div class="child-task-copy">
+        <h3 class="task-title">${escapeHtml(task.title)}</h3>
+        ${details}
+      </div>
       <div class="task-meta">
-        ${task.dueAt ? `<span class="meta-item">${remainingText(task.dueAt)}</span>` : ""}
+        ${dueAt}
         ${difficulty}
         ${recurrence}
         ${started}
@@ -541,13 +547,43 @@ function renderChildTaskCard(task) {
   `;
 }
 
+function taskVisual(task) {
+  const text = normalizeUserName(`${task.title} ${task.details || ""}`);
+  const matches = [
+    [["зуб", "чистити"], "🦷", "mint"],
+    [["посуд", "посудом", "таріл", "кух"], "🍽️", "sun"],
+    [["пил", "підлог", "приб", "кімнат"], "🧹", "sky"],
+    [["сміт", "винести"], "🗑️", "green"],
+    [["урок", "чит", "книг", "домаш"], "📚", "blue"],
+    [["одяг", "пран", "шаф"], "👕", "rose"],
+    [["ліж", "постел"], "🛏️", "lavender"],
+    [["їжа", "нагоду", "вода"], "🥣", "sun"],
+    [["спорт", "заряд", "вправ"], "🏃", "green"],
+  ];
+  const match = matches.find(([keywords]) => keywords.some((keyword) => text.includes(keyword)));
+  if (match) return { icon: match[1], theme: match[2] };
+  if (task.difficulty === "hard") return { icon: "🏆", theme: "sun" };
+  if (task.difficulty === "easy") return { icon: "✨", theme: "mint" };
+  return { icon: "✅", theme: "blue" };
+}
+
+function taskMetaIcon(type) {
+  const icons = {
+    calendar: "📅",
+    difficulty: "◇",
+    repeat: "↻",
+    timer: "⏱",
+  };
+  return `<span aria-hidden="true">${icons[type] || ""}</span>`;
+}
+
 function renderTaskActions(task) {
   if (task.status === "available" && isTaskForCurrentUser(task)) {
-    return `<button class="primary" type="button" data-task-action="start">Взяти</button>`;
+    return `<button class="primary child-action-button" type="button" data-task-action="start"><span>Взяти завдання</span><span aria-hidden="true">→</span></button>`;
   }
 
   if (task.status === "in_progress" && isCurrentUserId(task.assignedToUserId)) {
-    return `<button class="primary" type="button" data-task-action="complete">Позначити виконаним</button>`;
+    return `<button class="primary child-action-button" type="button" data-task-action="complete"><span>Готово</span><span aria-hidden="true">✓</span></button>`;
   }
 
   if (task.status === "done" && isAdmin()) {
