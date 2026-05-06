@@ -132,13 +132,15 @@ function normalizeState(nextState) {
       deadlineAmount,
       deadlineUnit,
       dueAt: task.dueAt || (deadlineAmount ? addDuration(task.createdAt || nowIso(), deadlineAmount, deadlineUnit) : null),
-      assignedToUserId: task.assignedToUserId || null,
-      targetUserId: task.targetUserId || null,
+      assignedToUserId: normalizeOptionalId(task.assignedToUserId),
+      targetUserId: normalizeOptionalId(task.targetUserId),
       difficulty: task.difficulty || "medium",
       deletedAt: task.deletedAt || null,
       startedAt: task.startedAt || null,
       completedByUserId: task.completedByUserId || null,
       approvedByUserId: task.approvedByUserId || null,
+      recurrence: task.recurrence || "none",
+      status: task.status || "available",
     };
   });
 
@@ -230,6 +232,12 @@ function findUserByName(name) {
 
 function normalizeUserName(name) {
   return String(name).trim().toLowerCase();
+}
+
+function normalizeOptionalId(value) {
+  const normalized = String(value ?? "").trim();
+  if (!normalized || ["null", "undefined", "all", "any", "*"].includes(normalized.toLowerCase())) return null;
+  return normalized;
 }
 
 function userUrlValue(user) {
@@ -431,7 +439,7 @@ function renderTasks() {
 }
 
 function isTaskForCurrentUser(task) {
-  if (!task.targetUserId) return true;
+  if (!normalizeOptionalId(task.targetUserId)) return true;
   if (isCurrentUserId(task.targetUserId)) return true;
 
   const targetUser = state.users.find((user) => user.id === task.targetUserId);
@@ -818,7 +826,7 @@ function addTask(formData) {
     title: formData.get("title").trim(),
     reward: Number(formData.get("reward")),
     details: formData.get("details").trim(),
-    targetUserId: formData.get("targetUserId") || null,
+    targetUserId: normalizeOptionalId(formData.get("targetUserId")),
     difficulty: formData.get("difficulty") || "medium",
     deadlineAmount,
     deadlineUnit,
@@ -853,7 +861,7 @@ function updateTaskFromForm(formData) {
   task.title = formData.get("title").trim();
   task.reward = Number(formData.get("reward"));
   task.details = formData.get("details").trim();
-  task.targetUserId = formData.get("targetUserId") || null;
+  task.targetUserId = normalizeOptionalId(formData.get("targetUserId"));
   task.difficulty = formData.get("difficulty") || "medium";
   task.deadlineAmount = deadlineAmount;
   task.deadlineUnit = deadlineUnit;
@@ -1135,16 +1143,16 @@ function taskToDb(task) {
     deadline_amount: task.deadlineAmount,
     deadline_unit: task.deadlineUnit,
     due_at: task.dueAt,
-    target_user_id: task.targetUserId,
+    target_user_id: normalizeOptionalId(task.targetUserId),
     difficulty: task.difficulty,
     deleted_at: task.deletedAt,
     requires_approval: task.requiresApproval,
     recurrence: task.recurrence,
     status: task.status,
     created_by_user_id: task.createdByUserId,
-    assigned_to_user_id: task.assignedToUserId,
-    completed_by_user_id: task.completedByUserId,
-    approved_by_user_id: task.approvedByUserId,
+    assigned_to_user_id: normalizeOptionalId(task.assignedToUserId),
+    completed_by_user_id: normalizeOptionalId(task.completedByUserId),
+    approved_by_user_id: normalizeOptionalId(task.approvedByUserId),
     created_at: task.createdAt,
     started_at: task.startedAt,
     completed_at: task.completedAt,
@@ -1162,16 +1170,16 @@ function taskFromDb(row) {
     deadlineAmount: row.deadline_amount,
     deadlineUnit: row.deadline_unit,
     dueAt: row.due_at,
-    targetUserId: row.target_user_id,
+    targetUserId: normalizeOptionalId(row.target_user_id),
     difficulty: row.difficulty || "medium",
     deletedAt: row.deleted_at,
     requiresApproval: row.requires_approval,
     recurrence: row.recurrence,
     status: row.status,
     createdByUserId: row.created_by_user_id,
-    assignedToUserId: row.assigned_to_user_id,
-    completedByUserId: row.completed_by_user_id,
-    approvedByUserId: row.approved_by_user_id,
+    assignedToUserId: normalizeOptionalId(row.assigned_to_user_id),
+    completedByUserId: normalizeOptionalId(row.completed_by_user_id),
+    approvedByUserId: normalizeOptionalId(row.approved_by_user_id),
     createdAt: row.created_at,
     startedAt: row.started_at,
     completedAt: row.completed_at,
