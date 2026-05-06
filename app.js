@@ -578,6 +578,22 @@ function taskMetaIcon(type) {
 }
 
 function renderTaskActions(task) {
+  if (isAdmin()) {
+    if (task.status === "done") {
+      return `
+        <button class="primary" type="button" data-task-action="approve">Апрувити</button>
+        <button class="secondary" type="button" data-task-action="return">Повернути в роботу</button>
+        <button class="secondary" type="button" data-task-action="edit">Редагувати</button>
+        <button class="danger" type="button" data-task-action="delete">Видалити</button>
+      `;
+    }
+
+    return `
+      <button class="secondary" type="button" data-task-action="edit">Редагувати</button>
+      <button class="danger" type="button" data-task-action="delete">Видалити</button>
+    `;
+  }
+
   if (task.status === "available" && isTaskForCurrentUser(task)) {
     return `<button class="primary child-action-button" type="button" data-task-action="start"><span>Взяти завдання</span><span aria-hidden="true">→</span></button>`;
   }
@@ -586,21 +602,7 @@ function renderTaskActions(task) {
     return `<button class="primary child-action-button" type="button" data-task-action="complete"><span>Готово</span><span aria-hidden="true">✓</span></button>`;
   }
 
-  if (task.status === "done" && isAdmin()) {
-    return `
-      <button class="primary" type="button" data-task-action="approve">Апрувити</button>
-      <button class="secondary" type="button" data-task-action="return">Повернути в роботу</button>
-      <button class="secondary" type="button" data-task-action="edit">Редагувати</button>
-      <button class="danger" type="button" data-task-action="delete">Видалити</button>
-    `;
-  }
-
-  return isAdmin()
-    ? `
-      <button class="secondary" type="button" data-task-action="edit">Редагувати</button>
-      <button class="danger" type="button" data-task-action="delete">Видалити</button>
-    `
-    : "";
+  return "";
 }
 
 function renderCompletedToday() {
