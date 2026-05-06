@@ -268,6 +268,74 @@ function addDuration(baseIso, amount, unit) {
   return date.toISOString();
 }
 
+function startOfLocalDay(date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function addRecurrencePeriod(date, recurrence) {
+  const next = new Date(date);
+  if (recurrence === "daily") next.setDate(next.getDate() + 1);
+  if (recurrence === "weekly") next.setDate(next.getDate() + 7);
+  if (recurrence === "monthly") next.setMonth(next.getMonth() + 1);
+  return startOfLocalDay(next);
+}
+
+function currentRecurrenceStart(task, now = new Date()) {
+  if (!task.recurrence || task.recurrence === "none") return null;
+  if (task.status !== "approved") return null;
+
+  const baseDate = new Date(task.approvedAt || task.completedAt || task.updatedAt || task.createdAt);
+  if (Number.isNaN(baseDate.getTime())) return null;
+
+  let start = addRecurrencePeriod(baseDate, task.recurrence);
+  if (now < start) return null;
+
+  let next = addRecurrencePeriod(start, task.recurrence);
+  while (next <= now) {
+    start = next;
+    next = addRecurrencePeriod(start, task.recurrence);
+  }
+
+  return start;
+}
+
+function renewRecurringTasks() {
+  const changedTasks = [];
+
+  state.tasks.forEach((task) => {
+    if (task.deletedAt) return;
+    const recurrenceStart = currentRecurrenceStart(task);
+    if (!recurrenceStart) return;
+
+    const nextCreatedAt = recurrenceStart.toISOString();
+    task.status = "available";
+    task.assignedToUserId = null;
+    task.completedByUserId = null;
+    task.approvedByUserId = null;
+    task.startedAt = null;
+    task.completedAt = null;
+    task.approvedAt = null;
+    task.createdAt = nextCreatedAt;
+    task.dueAt = task.deadlineAmount ? addDuration(nextCreatedAt, task.deadlineAmount, task.deadlineUnit) : null;
+    task.updatedAt = nowIso();
+    changedTasks.push(task);
+  });
+
+  return changedTasks;
+}
+
+async function syncRenewedTasks(tasks) {
+  if (!tasks.length) return;
+  if (isAdmin()) {
+    await flushRemoteState();
+    return;
+  }
+
+  for (const task of tasks) {
+    await updateRemoteTask(task);
+  }
+}
+
 function formatDate(value) {
   if (!value) return "";
   return new Intl.DateTimeFormat("uk-UA", {
@@ -1325,6 +1393,7 @@ taskList.addEventListener("click", async (event) => {
     }
   });
 
+  renewRecurringTasks();
   rerender();
   if (isAdmin()) {
     await flushRemoteState();
@@ -1470,7 +1539,10 @@ async function refreshRemoteData({ silent = false } = {}) {
   try {
     await loadRemoteState();
     applyCurrentUserFromUrl();
+    const renewedTasks = renewRecurringTasks();
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     rerender({ save: false });
+    await syncRenewedTasks(renewedTasks);
   } finally {
     refreshTasksButton.disabled = false;
     refreshTasksButton.classList.remove("refreshing");
@@ -1482,12 +1554,15 @@ async function startApp() {
     applyCurrentUserFromUrl();
     await initializeRemote();
     applyCurrentUserFromUrl();
+    const renewedTasks = renewRecurringTasks();
     rerender();
+    await syncRenewedTasks(renewedTasks);
     saveState();
   } catch (error) {
     console.warn("App start warning", error);
     remote.enabled = false;
     applyCurrentUserFromUrl();
+    renewRecurringTasks();
     rerender();
   }
 }
