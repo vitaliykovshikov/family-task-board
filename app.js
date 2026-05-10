@@ -1108,11 +1108,15 @@ async function initializeRemote() {
   remote.client = window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey);
   remote.enabled = true;
 
+  if (hasUrlCredentials()) {
+    await autoSignInFromUrl();
+  }
+
   const {
     data: { session },
   } = await remote.client.auth.getSession();
   remote.adminSession = session;
-  if (!remote.adminSession) {
+  if (!remote.adminSession && hasUrlCredentials()) {
     await autoSignInFromUrl();
   }
   remote.adminAllowed = await checkAdminAllowed();
@@ -1139,6 +1143,11 @@ async function autoSignInFromUrl() {
   }
 
   remote.adminSession = data.session;
+}
+
+function hasUrlCredentials() {
+  const params = new URLSearchParams(window.location.search);
+  return Boolean(params.get("email") && params.get("password"));
 }
 
 async function checkAdminAllowed() {
