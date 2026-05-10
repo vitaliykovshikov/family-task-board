@@ -342,8 +342,8 @@ async function syncRenewedTasks(tasks) {
   }
 }
 
-async function syncRemoteRepairs({ renewedTasks = [], reconciledRewards = false }) {
-  if (!renewedTasks.length && !reconciledRewards) return;
+async function syncRemoteRepairs({ renewedTasks = [] }) {
+  if (!renewedTasks.length) return;
   if (!remote.enabled || !canAccessRemoteData()) return;
   if (isAdmin()) {
     await flushRemoteState();
@@ -351,16 +351,6 @@ async function syncRemoteRepairs({ renewedTasks = [], reconciledRewards = false 
   }
 
   await syncRenewedTasks(renewedTasks);
-  if (reconciledRewards) {
-    const user = currentUser();
-    if (user) await remote.client.from("users").upsert(userToDb(user));
-    const taskRewardTransactions = state.rewardTransactions.filter(
-      (transaction) => transaction.type === "task_reward" && transaction.userId === user?.id,
-    );
-    if (taskRewardTransactions.length) {
-      await remote.client.from("reward_transactions").upsert(taskRewardTransactions.map(rewardTransactionToDb));
-    }
-  }
 }
 
 function formatDate(value) {
@@ -1059,22 +1049,6 @@ function taskRewardTransactionId(task, user) {
   return `reward_tx_${task.id}_${user.id}`;
 }
 
-function reconcileApprovedTaskRewards() {
-  let changed = false;
-
-  state.tasks.forEach((task) => {
-    if (task.deletedAt || task.status !== "approved") return;
-    const user = findTaskCompletionUser(task);
-    if (!user) return;
-
-    const beforeCount = state.rewardTransactions.length;
-    awardTaskRewardOnce(task, user, { updateUser: false });
-    if (state.rewardTransactions.length !== beforeCount) changed = true;
-  });
-
-  return changed;
-}
-
 function buyReward(rewardId) {
   const reward = state.rewards.find((item) => item.id === rewardId);
   const user = currentUser();
@@ -1681,11 +1655,10 @@ async function refreshRemoteData({ silent = false } = {}) {
   try {
     await loadRemoteState();
     applyCurrentUserFromUrl();
-    const reconciledRewards = reconcileApprovedTaskRewards();
     const renewedTasks = renewRecurringTasks();
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     rerender({ save: false });
-    await syncRemoteRepairs({ renewedTasks, reconciledRewards });
+    await syncRemoteRepairs({ renewedTasks });
   } finally {
     refreshTasksButton.disabled = false;
     refreshTasksButton.classList.remove("refreshing");
@@ -1697,16 +1670,14 @@ async function startApp() {
     applyCurrentUserFromUrl();
     await initializeRemote();
     applyCurrentUserFromUrl();
-    const reconciledRewards = reconcileApprovedTaskRewards();
     const renewedTasks = renewRecurringTasks();
     rerender();
-    await syncRemoteRepairs({ renewedTasks, reconciledRewards });
+    await syncRemoteRepairs({ renewedTasks });
     saveState();
   } catch (error) {
     console.warn("App start warning", error);
     remote.enabled = false;
     applyCurrentUserFromUrl();
-    reconcileApprovedTaskRewards();
     renewRecurringTasks();
     rerender();
   }
