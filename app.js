@@ -192,8 +192,6 @@ function saveState() {
   if (!canAccessRemoteData()) return;
   if (isAdmin()) {
     syncRemoteState();
-  } else {
-    syncCurrentMemberUser();
   }
 }
 
@@ -1198,16 +1196,6 @@ function syncRemoteState() {
     });
 }
 
-function syncCurrentMemberUser() {
-  if (!remote.enabled || !canAccessRemoteData() || isAdminRoute()) return;
-  const user = currentUser();
-  if (!user) return;
-
-  remote.client.from("users").upsert(userToDb(user)).then(({ error }) => {
-    if (error) console.warn("Supabase member user sync warning", error);
-  });
-}
-
 async function syncRemoteStateSequentially() {
   const operations = [
     state.users.length ? ["users", state.users.map(userToDb)] : null,
@@ -1600,7 +1588,7 @@ usersList.addEventListener("click", (event) => {
   rerender();
 });
 
-document.querySelector("#usersView").addEventListener("submit", (event) => {
+document.querySelector("#usersView").addEventListener("submit", async (event) => {
   const form = event.target.closest("[data-balance-user-id]");
   if (!form || !isAdmin()) return;
 
@@ -1626,6 +1614,7 @@ document.querySelector("#usersView").addEventListener("submit", (event) => {
   }
 
   rerender();
+  await flushRemoteState();
 });
 
 tabs.forEach((tab) => {
