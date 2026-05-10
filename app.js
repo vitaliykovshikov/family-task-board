@@ -1034,14 +1034,14 @@ function findTaskCompletionUser(task) {
   );
 }
 
-function awardTaskRewardOnce(task, user) {
+function awardTaskRewardOnce(task, user, { updateUser = true } = {}) {
   const existingReward = state.rewardTransactions.find(
     (transaction) => transaction.type === "task_reward" && transaction.taskId === task.id && transaction.userId === user.id,
   );
   if (existingReward) return;
 
   state.rewardTransactions.push({
-    id: createId("reward_tx"),
+    id: taskRewardTransactionId(task, user),
     userId: user.id,
     taskId: task.id,
     amount: task.reward,
@@ -1049,9 +1049,14 @@ function awardTaskRewardOnce(task, user) {
     createdByUserId: currentUser().id,
     createdAt: nowIso(),
   });
+  if (!updateUser) return;
   user.balance += task.reward;
   user.completedTasksCount += 1;
   user.updatedAt = nowIso();
+}
+
+function taskRewardTransactionId(task, user) {
+  return `reward_tx_${task.id}_${user.id}`;
 }
 
 function reconcileApprovedTaskRewards() {
@@ -1063,7 +1068,7 @@ function reconcileApprovedTaskRewards() {
     if (!user) return;
 
     const beforeCount = state.rewardTransactions.length;
-    awardTaskRewardOnce(task, user);
+    awardTaskRewardOnce(task, user, { updateUser: false });
     if (state.rewardTransactions.length !== beforeCount) changed = true;
   });
 
