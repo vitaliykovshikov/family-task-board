@@ -653,6 +653,7 @@ button:disabled {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 8px;
   align-self: center;
   width: max-content;
   max-width: min(100%, 360px);
@@ -667,6 +668,15 @@ button:disabled {
   font-weight: 950;
   line-height: 1;
   white-space: nowrap;
+}
+
+.child-balance small {
+  display: inline-block;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+  padding: 6px 9px;
+  font-size: 0.45em;
+  font-weight: 900;
 }
 
 .child-mode .main-tabs {

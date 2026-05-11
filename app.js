@@ -413,7 +413,10 @@ function renderUser() {
   document.querySelector("#balance").textContent = user.balance;
   document.querySelector("#userUrlHint").textContent = `?user=${userUrlValue(user)}`;
   childBalance.hidden = isAdminRoute() || !canAccessRemoteData();
-  childBalance.innerHTML = `<span aria-hidden="true">⭐</span> ${user.balance} балів`;
+  const pendingPoints = pendingApprovalPointsForCurrentUser();
+  childBalance.innerHTML = pendingPoints
+    ? `<span aria-hidden="true">⭐</span> ${user.balance} <small>+${pendingPoints} на апруві</small>`
+    : `<span aria-hidden="true">⭐</span> ${user.balance} балів`;
   adminOnlyElements.forEach((element) => {
     element.hidden = !isAdmin();
   });
@@ -671,6 +674,19 @@ function renderCompletedToday() {
       },
     )
     .join("");
+}
+
+function pendingApprovalPointsForCurrentUser() {
+  return state.tasks
+    .filter(
+      (task) =>
+        !task.deletedAt &&
+        task.status === "done" &&
+        task.completedByUserId === currentUser().id &&
+        task.completedAt &&
+        isToday(task.completedAt),
+    )
+    .reduce((sum, task) => sum + task.reward, 0);
 }
 
 function isToday(value) {
@@ -1489,6 +1505,9 @@ taskList.addEventListener("click", async (event) => {
   });
 
   renewRecurringTasks();
+  if (!isAdminRoute() && action === "complete" && changedTask) {
+    setActiveView("completed");
+  }
   rerender();
   if (isAdmin()) {
     await flushRemoteState();
@@ -1606,13 +1625,17 @@ tabs.forEach((tab) => {
 
 mainTabs.forEach((tab) => {
   tab.addEventListener("click", () => {
-    activeView = tab.dataset.view;
-    mainTabs.forEach((item) => item.classList.toggle("active", item === tab));
-    document.querySelectorAll(".view").forEach((view) => {
-      view.classList.toggle("active", view.id === `${activeView}View`);
-    });
+    setActiveView(tab.dataset.view);
   });
 });
+
+function setActiveView(viewName) {
+  activeView = viewName;
+  mainTabs.forEach((item) => item.classList.toggle("active", item.dataset.view === activeView));
+  document.querySelectorAll(".view").forEach((view) => {
+    view.classList.toggle("active", view.id === `${activeView}View`);
+  });
+}
 
 resetDemoButton.addEventListener("click", () => {
   state = structuredClone(seedState);
@@ -1647,7 +1670,10 @@ function updateLiveTimers() {
 
 async function refreshRemoteData({ silent = false } = {}) {
   if (!remote.enabled || !canAccessRemoteData()) return;
-  if (remote.syncInProgress) return;
+  if (remote.syncInProgress) {
+    if (silent) return;
+    await waitForRemoteSync();
+  }
 
   refreshTasksButton.disabled = true;
   if (!silent) refreshTasksButton.classList.add("refreshing");
@@ -1662,6 +1688,13 @@ async function refreshRemoteData({ silent = false } = {}) {
   } finally {
     refreshTasksButton.disabled = false;
     refreshTasksButton.classList.remove("refreshing");
+  }
+}
+
+async function waitForRemoteSync(timeoutMs = 2500) {
+  const startedAt = Date.now();
+  while (remote.syncInProgress && Date.now() - startedAt < timeoutMs) {
+    await new Promise((resolve) => setTimeout(resolve, 50));
   }
 }
 
