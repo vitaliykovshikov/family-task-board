@@ -1041,15 +1041,24 @@ function findTaskCompletionUser(task) {
 }
 
 function awardTaskRewardOnce(task, user, { updateUser = true } = {}) {
+  const rewardCycleId = taskRewardTransactionId(task, user);
+  const rewardCycleDate = localDateKey(task.completedAt || task.approvedAt || nowIso());
   const existingReward = state.rewardTransactions.find(
-    (transaction) => transaction.type === "task_reward" && transaction.taskId === task.id && transaction.userId === user.id,
+    (transaction) =>
+      transaction.type === "task_reward" &&
+      transaction.taskId === task.id &&
+      transaction.userId === user.id &&
+      (transaction.id === rewardCycleId ||
+        transaction.rewardCycleId === taskRewardCycleKey(task, user) ||
+        localDateKey(transaction.createdAt) === rewardCycleDate),
   );
   if (existingReward) return;
 
   state.rewardTransactions.push({
-    id: taskRewardTransactionId(task, user),
+    id: rewardCycleId,
     userId: user.id,
     taskId: task.id,
+    rewardCycleId: taskRewardCycleKey(task, user),
     amount: task.reward,
     type: "task_reward",
     createdByUserId: currentUser().id,
@@ -1062,7 +1071,19 @@ function awardTaskRewardOnce(task, user, { updateUser = true } = {}) {
 }
 
 function taskRewardTransactionId(task, user) {
-  return `reward_tx_${task.id}_${user.id}`;
+  return `reward_tx_${taskRewardCycleKey(task, user)}`;
+}
+
+function taskRewardCycleKey(task, user) {
+  return `${task.id}_${user.id}_${localDateKey(task.completedAt || task.approvedAt || nowIso())}`;
+}
+
+function localDateKey(value) {
+  const date = new Date(value);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function buyReward(rewardId) {
